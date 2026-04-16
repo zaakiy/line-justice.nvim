@@ -44,4 +44,22 @@ Now when your colleague says "line 42," you both see the same thing. When you're
 
 **LineJustice delivers absolute justice to line number confusion.**
 
+## Configuration
+
+### nvim-treesitter-context Compatibility
+
+If you use [nvim-treesitter-context](https://github.com/nvim-treesitter/nvim-treesitter-context), configure it to work seamlessly with LineJustice by disabling its line numbers and adding a visual separator:
+
+```lua
+{
+  "nvim-treesitter/nvim-treesitter-context",
+  opts = {
+    multiwindow = true,
+    line_numbers = false, -- Disable to avoid alignment issues with statuscol
+    separator = "-", -- Add visual separator between context and content
+  },
+},
+```
+
+**Why this matters:** The treesitter-context plugin renders its own line numbers that don't align with LineJustice's custom statuscol formatting. By disabling context line numbers, LineJustice handles all line numbering consistently across both the context and main content areas. The separator provides a clear visual boundary between the two sections.
 
