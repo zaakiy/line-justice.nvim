@@ -42,7 +42,7 @@ Now when your colleague says "line 42," you both see the same thing. When you're
 - **Debugging** is clearer—reference lines with absolute certainty
 - **Teaching** is easier—show students exactly where to look
 
-**LineJustice delivers absolute justice to line number confusion.**
+**LineJustice delivers absolute justice to relative line number confusion.**
 
 ## Configuration
 
