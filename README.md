@@ -1,4 +1,4 @@
-# line-justice.nvim
+# line-justice.nvim – A beautiful line numbering plugin for NeoVim
 
 **Absolute justice with relative context**
 
@@ -6,9 +6,11 @@
 
 ### The Problem
 
-You're pair programming with a colleague. They say, "Hey, there's a bug on line 42." You look at your screen—line 42 is different. They're looking at a different part of the file. Confusion ensues. You both waste 5 minutes trying to find the same line.
+**You use relative line numbers in NeoVim. Your colleagues don't.**
 
-Or worse: you're in a code review, and someone points to "the line with the bug" but you're scrolling through a 500-line file trying to find it. "Is it near the top? Middle? Bottom?" you ask. They don't know—they're just counting from where they are.
+You're pair programming with a colleague. They say, "Hey, there's a bug on line 16." You look at your screen – line 16 above or line 16 below? They're looking at a different part of the file. Confusion ensues. You both waste 5 minutes trying to find the same line.
+
+Or worse: you're in a code review, and someone points to "the line with the bug" but you're scrolling through a 500-line file trying to find it. "Is it near the top? Middle? Bottom?" you ask. They don't know – they're just counting from where they are.
 
 ### The Solution
 
@@ -29,7 +31,7 @@ Now when your colleague says "line 42," you both see the same thing. When you're
 **With LineJustice:**
 - "Which line?"
 - "Line 42!"
-- *Both instantly see: `42  5` (absolute 42, relative 5 lines away)*
+- *Both instantly see: `42  16` (absolute 42, relative 16 lines away)*
 - "Got it. Fixed."
 
 ### Why It Matters
