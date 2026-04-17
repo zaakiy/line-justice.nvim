@@ -14,7 +14,7 @@ Is it near the top? The middle? Nobody knows.
 
 ## The Solution
 
-**LineJustice** shows you both numbers at once — every line, always:
+**LineJustice shows you both numbers at once — every line, always.**
 
 42 &nbsp; 6 &nbsp; function handleRequest(req, res) {\
 43 &nbsp; 5 &nbsp;&nbsp;&nbsp; const user = await getUser(req.params.id)\
