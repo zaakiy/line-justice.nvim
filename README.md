@@ -67,15 +67,17 @@ When you need to jump, you use the relative number. When you reference, you use 
 
 ### [packer.nvim](https://github.com/wbthomason/packer.nvim)
 
+NOTE: Packer is untested. Looking for packer users to contribute any corrections.
+
 ```lua
 use {
   "zaakiy/line-justice.nvim",
   requires = { "luukvbaal/statuscol.nvim" },
+  opts = {
+    line_numbers  = { theme = "Horizon" },
+    wrapped_lines = { indicator = "None" },
+  },
   config = function()
-    opts = {
-      line_numbers  = { theme = "Horizon" },
-      wrapped_lines = { indicator = "None" },
-    }
     require("line-justice").setup(opts)
   end,
 }
@@ -140,7 +142,7 @@ opts = {
 
   },
 
-}
+},
 ```
 
 ---
