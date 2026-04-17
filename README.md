@@ -34,6 +34,7 @@ Now when your colleague says _"line 42"_, you both instantly see the same thing.
 When you need to jump, you use the relative number. When you reference, you use the absolute. No confusion.
 
 ## Demo
+<img width="746" height="480" alt="line-justice" src="https://github.com/user-attachments/assets/7c675c89-883a-4bbe-851b-5836bfb6ea99" />
 
 
 
