@@ -73,72 +73,67 @@ Call `require("line-justice").setup(opts)` with any options you want to override
 
 ```lua
 require("line-justice").setup({
-  statuscol = {
-    enabled     = true,
-    relculright = true,  -- right-align cursor line number
-    preset      = nil,   -- named colour preset; "horizon" uses the built-in palette
-                         -- nil = auto-detect colours from your active colorscheme
-    -- Per-key colour overrides merged on top of preset / auto-detect.
-    -- Any key left out falls through to the preset or auto-detect.
-    highlights = {
-      -- cursor    = { fg = "#bb9af7", bold = true },
-      -- abs_above = { fg = "#565f89" },
-      -- abs_below = { fg = "#41664f" },
-      -- rel_above = { fg = "#7b9ac7" },
-      -- rel_below = { fg = "#6aa781" },
-      -- wrapped   = { fg = "#565f89", italic = true },
+  line_numbers = {
+    -- Named colour preset. "Horizon" uses the built-in palette.
+    -- nil = auto-detect colours from your active colorscheme (default).
+    preset = nil,
+
+    -- Per-colour overrides. Any key left out falls through to the preset
+    -- or auto-detect. All keys are optional.
+    theme = {
+      -- CursorLine    = { fg = "#bb9af7", bold = true },
+      -- AbsoluteAbove = { fg = "#565f89" },
+      -- AbsoluteBelow = { fg = "#41664f" },
+      -- RelativeAbove = { fg = "#7b9ac7" },
+      -- RelativeBelow = { fg = "#6aa781" },
+      -- WrappedLine   = { fg = "#565f89", italic = true },
     },
   },
 })
 ```
 
-### bt_ignore — buffer type matching
+### Theme keys
 
-`bt_ignore` disables line-justice on buffers whose `&buftype` matches an entry exactly. This catches plugin UIs and scratch buffers that may not have a specific filetype set.
-
-| Common `&buftype` values | When it applies |
+| Key | What it colours |
 |---|---|
-| `"nofile"` | Scratch buffers, most plugin UIs (default) |
-| `"nowrite"` | Buffers that cannot be written |
-| `"quickfix"` | Quickfix and location list windows |
-| `"terminal"` | Terminal buffers |
-| `"help"` | Help pages |
-| `"prompt"` | Input prompt buffers |
-| `"popup"` | Floating popup windows |
-
-The default is `{ "nofile" }`, which covers the vast majority of plugin-managed buffers. `&buftype` values are always exact — wildcards are not supported here.
+| `CursorLine` | The line the cursor is on |
+| `AbsoluteAbove` | Absolute numbers on lines above the cursor |
+| `AbsoluteBelow` | Absolute numbers on lines below the cursor |
+| `RelativeAbove` | Relative distance for lines above the cursor |
+| `RelativeBelow` | Relative distance for lines below the cursor |
+| `WrappedLine` | The ↳ indicator on soft-wrapped continuation lines |
 
 ---
 
 ## Colour Presets
 
-By default line-justice auto-detects colours from your active colorscheme. You can instead pin it to a named preset via `statuscol.preset`.
+By default line-justice auto-detects colours from your active colorscheme. You can instead pin it to a named preset via `line_numbers.preset`.
 
-### `horizon`
+### `Horizon`
 
 A cool blue-purple sky above the cursor, fresh green earth below. These are the author's original hand-crafted colours, designed for TokyoNight-family colorschemes but great on any dark theme.
 
-| Slot | Hex | Description |
+| Key | Hex | Description |
 |---|---|---|
-| `cursor` | `#bb9af7` | Soft violet, bold — cursor line number |
-| `abs_above` | `#565f89` | Muted blue-grey — absolute numbers above cursor |
-| `abs_below` | `#41664f` | Deep forest green — absolute numbers below cursor |
-| `rel_above` | `#7b9ac7` | Brighter steel blue — relative numbers above cursor |
-| `rel_below` | `#6aa781` | Brighter sage green — relative numbers below cursor |
-| `wrapped` | `#565f89` | Muted blue-grey, italic — wrapped line indicator |
+| `CursorLine` | `#bb9af7` | Soft violet, bold |
+| `AbsoluteAbove` | `#565f89` | Muted blue-grey |
+| `AbsoluteBelow` | `#41664f` | Deep forest green |
+| `RelativeAbove` | `#7b9ac7` | Brighter steel blue |
+| `RelativeBelow` | `#6aa781` | Brighter sage green |
+| `WrappedLine` | `#565f89` | Muted blue-grey, italic |
 
 ```lua
--- Use the horizon preset:
+-- Use the Horizon preset:
 require("line-justice").setup({
-  statuscol = { preset = "horizon" },
+  line_numbers = { preset = "Horizon" },
 })
 
 -- Horizon preset with one colour overridden:
 require("line-justice").setup({
-  statuscol = {
-    preset = "horizon",
-    highlights = {
-      cursor = { fg = "#ff9e64", bold = true }, -- swap just the cursor colour
+  line_numbers = {
+    preset = "Horizon",
+    theme = {
+      CursorLine = { fg = "#ff9e64", bold = true }, -- swap just the cursor colour
     },
   },
 })
@@ -148,14 +143,14 @@ require("line-justice").setup({
 
 When `preset` is `nil`, line-justice reads your colorscheme's built-in highlight groups and derives colours automatically. It re-resolves on every `:colorscheme` change.
 
-| Slot | Probed groups (first match wins) |
+| Theme key | Probed groups (first match wins) |
 |---|---|
-| `cursor` | `CursorLineNr` |
-| `abs_above` | `LineNr` |
-| `abs_below` | `LineNrAbove`, `Comment` |
-| `rel_above` | `LineNr` |
-| `rel_below` | `LineNrBelow`, `String` |
-| `wrapped` | `NonText` |
+| `CursorLine` | `CursorLineNr` |
+| `AbsoluteAbove` | `LineNr` |
+| `AbsoluteBelow` | `LineNrAbove`, `Comment` |
+| `RelativeAbove` | `LineNr` |
+| `RelativeBelow` | `LineNrBelow`, `String` |
+| `WrappedLine` | `NonText` |
 
 ## How It Works
 
