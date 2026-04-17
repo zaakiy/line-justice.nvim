@@ -49,6 +49,11 @@ return {
     wrapped_lines = { indicator = "None" },
   },
 
+  config = function(_, opts)
+    -- Place any additional setup logic here, or just pass opts straight through.
+    require("line-justice").setup(opts)
+  end,
+
   -- ── Option B: Arrow indicator (↳) ─────────────────────────────────────────
   -- opts = {
   --   line_numbers  = { theme = "Horizon" },
