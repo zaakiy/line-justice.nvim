@@ -72,10 +72,11 @@ use {
   "zaakiy/line-justice.nvim",
   requires = { "luukvbaal/statuscol.nvim" },
   config = function()
-    require("line-justice").setup({
+    opts = {
       line_numbers  = { theme = "Horizon" },
       wrapped_lines = { indicator = "None" },
-    })
+    }
+    require("line-justice").setup(opts)
   end,
 }
 ```
@@ -91,7 +92,7 @@ Clone both `luukvbaal/statuscol.nvim` and `zaakiy/line-justice.nvim`, add them t
 Call `require("line-justice").setup(opts)` with any options you want to override. All keys are optional — omitting them uses the defaults shown below.
 
 ```lua
-require("line-justice").setup({
+opts = {
 
   line_numbers = {
 
@@ -139,7 +140,7 @@ require("line-justice").setup({
 
   },
 
-})
+}
 ```
 
 ---
