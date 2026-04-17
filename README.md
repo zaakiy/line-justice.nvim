@@ -23,7 +23,7 @@ Or worse: a code review where someone references _"the line with the bug"_ in a 
   45  13      return res.status(404).json({ error: 'Not found' })
   46  12    }
   47  11    ...
-  48   0  ←  cursor is here
+  48      ←  cursor is here
   49   1    return res.json(user)
   50   2  }
 ```
