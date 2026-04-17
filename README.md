@@ -36,7 +36,8 @@ When you need to jump, you use the relative number. When you reference, you use 
 
 ## Requirements
 
-- **NeoVim 0.10+** (for `statuscolumn` support)
+- **NeoVim 0.10+**
+- **[luukvbaal/statuscol.nvim](https://github.com/luukvbaal/statuscol.nvim)** (required — handles the statuscolumn rendering)
 
 ## Installation
 
@@ -45,6 +46,7 @@ When you need to jump, you use the relative number. When you reference, you use 
 ```lua
 {
   "zaakiy/line-justice.nvim",
+  dependencies = { "luukvbaal/statuscol.nvim" },
   event = "VeryLazy",
   opts = {}, -- uses defaults; see Configuration section to customise
 }
@@ -55,6 +57,7 @@ When you need to jump, you use the relative number. When you reference, you use 
 ```lua
 use {
   "zaakiy/line-justice.nvim",
+  requires = { "luukvbaal/statuscol.nvim" },
   config = function()
     require("line-justice").setup({})
   end,
@@ -63,7 +66,7 @@ use {
 
 ### Manual (no plugin manager)
 
-Clone the repository and add it to your `runtimepath`, then call `require("line-justice").setup({})` in your `init.lua`.
+Clone both `luukvbaal/statuscol.nvim` and `zaakiy/line-justice.nvim`, add them to your `runtimepath`, then call `require("line-justice").setup({})` in your `init.lua`.
 
 ## Configuration
 
@@ -71,32 +74,44 @@ Call `require("line-justice").setup(opts)` with any options you want to override
 
 ```lua
 require("line-justice").setup({
-  -- Core dual line number display
-  line_numbers = {
-    enabled   = true,
-    abs_width = 0,       -- 0 = auto (based on total line count, min 3)
-    rel_width = 2,       -- reserved width for the relative column
-    separator = " ",     -- string between absolute and relative columns
-    abs_hl    = "LineNr",        -- highlight group for absolute numbers
-    rel_hl    = "LineNrAbove",   -- highlight group for relative numbers
-    cur_hl    = "CursorLineNr",  -- highlight group for the cursor line
+  -- statuscol.nvim integration (required dependency)
+  statuscol = {
+    enabled     = true,
+    relculright = true, -- right-align cursor line number
+    -- File types where LineJustice is disabled
+    ft_ignore = {
+      "help", "dashboard", "neo-tree", "NvimTree",
+      "toggleterm", "terminal", "qf", "quickfix",
+      "nofile", "prompt", "packer", "lspinfo",
+      "TelescopePrompt", "avante", "AvanteTodos", "neominimap",
+    },
+    -- Highlight group colours (any vim.api.nvim_set_hl-compatible table)
+    highlights = {
+      abs        = { fg = "#7aa2f7" },           -- absolute numbers
+      abs_above  = { fg = "#565f89" },           -- absolute, above cursor
+      abs_below  = { fg = "#41664f" },           -- absolute, below cursor
+      cursor     = { fg = "#bb9af7", bold = true }, -- cursor line
+      rel_above  = { fg = "#7b9ac7" },           -- relative, above cursor
+      rel_below  = { fg = "#6aa781" },           -- relative, below cursor
+      wrapped    = { fg = "#565f89", italic = true }, -- wrapped line indicator
+    },
   },
 
-  -- nvim-treesitter-context integration (optional dependency)
+  -- nvim-treesitter-context integration (optional)
   treesitter_context = {
-    enabled    = true,
-    multiwindow = true,
-    line_numbers = false,  -- must be false to avoid alignment conflicts
-    separator  = "-",
+    enabled      = true,
+    multiwindow  = true,
+    line_numbers = false, -- must be false to avoid alignment conflicts
+    separator    = "-",
   },
 
-  -- mason-lspconfig integration (optional dependency)
+  -- mason-lspconfig integration (optional)
   lsp = {
-    enabled           = true,
-    ensure_installed  = { "ts_ls" },
-    automatic_enable  = true,
+    enabled          = true,
+    ensure_installed = { "ts_ls" },
+    automatic_enable = true,
     keymaps = {
-      -- action = "key"  (action names listed in the LSP section below)
+      -- action = "key", e.g.:
       hover = "K",
       -- definition  = "gd",
       -- references  = "gr",
@@ -123,19 +138,9 @@ require("line-justice").setup({
 | `format` | Format buffer |
 | `signature_help` | Show signature help |
 
-## Commands
-
-| Command | Description |
-|---|---|
-| `:LineJusticeToggle` | Toggle dual line numbers on/off |
-| `:LineJusticeEnable` | Enable LineJustice |
-| `:LineJusticeDisable` | Disable LineJustice, restore NeoVim defaults |
-
 ## nvim-treesitter-context Compatibility
 
-If you use [nvim-treesitter-context](https://github.com/nvim-treesitter/nvim-treesitter-context), LineJustice can auto-configure it for you — just set `treesitter_context.enabled = true` (the default).
-
-If you prefer to configure it yourself, set `treesitter_context.enabled = false` and use these settings to avoid alignment issues:
+LineJustice can auto-configure `nvim-treesitter-context` for you when `treesitter_context.enabled = true` (the default). If you prefer to manage it yourself, set `treesitter_context.enabled = false` and apply these settings manually to avoid alignment issues:
 
 ```lua
 {
@@ -148,11 +153,17 @@ If you prefer to configure it yourself, set `treesitter_context.enabled = false`
 }
 ```
 
-> **Why?** treesitter-context renders its own line numbers that don't align with LineJustice's custom `statuscolumn`. Disabling them lets LineJustice handle all numbering consistently. The separator gives a clear visual boundary between the context pane and content.
+> **Why?** treesitter-context renders its own line numbers that conflict with statuscol.nvim's custom gutter. Disabling them lets LineJustice control all numbering consistently. The separator gives a clear visual boundary between the context pane and content.
 
 ## How It Works
 
-LineJustice sets NeoVim's `statuscolumn` option to a Lua expression that is evaluated for every rendered line. It uses `v:lnum` (absolute) and `v:relnum` (relative) to build a fixed-width, highlight-aware column string — no timers, no autocmds on cursor movement, no performance cost beyond what NeoVim already does to render the gutter.
+LineJustice delegates all statuscolumn rendering to [`statuscol.nvim`](https://github.com/luukvbaal/statuscol.nvim). It registers a single custom segment that fires for every rendered line, outputting:
+
+- The **absolute** line number (right-aligned, with thousands separators for large files)
+- A blank relative column on the cursor line, or the **relative** distance on all other lines
+- A `↳` indicator for soft-wrapped continuation lines
+
+All columns are fixed-width and highlight-aware — colours change based on whether a line is above or below the cursor.
 
 ## License
 
