@@ -92,6 +92,11 @@ require("line-justice").setup({
       "Avante*",      -- avante, AvanteTodos, ...
       "neominimap", "snacks_*",
     },
+    -- bt_ignore: buffer types (&buftype) to disable line-justice on.
+    -- Matched exactly. "nofile" covers most plugin UIs and scratch buffers.
+    bt_ignore = {
+      "nofile",
+    },
     -- Per-key colour overrides merged on top of preset / auto-detect.
     -- Any key left out falls through to the preset or auto-detect.
     highlights = {
@@ -129,6 +134,22 @@ ft_ignore = {
   "help",       -- plain exact match (case-insensitive)
 }
 ```
+
+### bt_ignore — buffer type matching
+
+`bt_ignore` disables line-justice on buffers whose `&buftype` matches an entry exactly. This catches plugin UIs and scratch buffers that may not have a specific filetype set.
+
+| Common `&buftype` values | When it applies |
+|---|---|
+| `"nofile"` | Scratch buffers, most plugin UIs (default) |
+| `"nowrite"` | Buffers that cannot be written |
+| `"quickfix"` | Quickfix and location list windows |
+| `"terminal"` | Terminal buffers |
+| `"help"` | Help pages |
+| `"prompt"` | Input prompt buffers |
+| `"popup"` | Floating popup windows |
+
+The default is `{ "nofile" }`, which covers the vast majority of plugin-managed buffers. `&buftype` values are always exact — wildcards are not supported here.
 
 ---
 

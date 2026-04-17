@@ -18,11 +18,14 @@
 ---@field enabled?     boolean              Enable statuscol integration (default: true)
 ---@field relculright? boolean              Right-align cursor line number (default: true)
 ---@field preset?      string               Named colour preset. One of: "horizon" (default: nil — auto-detect)
----@field ft_ignore?   string[]             File types where line-justice is disabled.
+---@field ft_ignore?   string[]             Filetypes where line-justice is disabled.
 ---                                         Entries are matched case-insensitively.
 ---                                         Glob wildcards are supported: "*" matches any sequence,
 ---                                         "?" matches a single character.
 ---                                         Examples: "neo-*", "Avante*", "snacks_*"
+---@field bt_ignore?   string[]             Buffer types (&buftype) where line-justice is disabled.
+---                                         Matched exactly. Common values: "nofile", "nowrite",
+---                                         "acwrite", "quickfix", "terminal", "help", "prompt", "popup".
 ---@field highlights?  LineJusticeHighlights Per-key colour overrides; merged on top of preset / auto-detect
 
 ---@class LineJusticeConfig
@@ -55,6 +58,10 @@ local defaults = {
       "Avante*",        -- avante, AvanteTodos, ...
       "neominimap",
       "snacks_*",       -- all snacks.nvim buffers
+    },
+    -- Buffer types (&buftype) to ignore. Matched exactly by statuscol.nvim.
+    bt_ignore = {
+      "nofile",   -- scratch/unnamed buffers, most plugin UIs
     },
     highlights = {},
   },
@@ -339,6 +346,7 @@ function M._setup_statuscol()
   statuscol.setup({
     relculright = cfg.relculright,
     ft_ignore   = ft_ignore,
+    bt_ignore   = cfg.bt_ignore,
     segments = {
       {
         text = {
