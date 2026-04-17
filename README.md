@@ -320,15 +320,51 @@ require("line-justice").setup({
 
 ---
 
+## Large Files & Thousands Separators
+
+No code file _needs_ to be so long that its line numbers require a comma. There, it's been said.
+
+And yet — here we are. Maybe it's generated code. Maybe it's a migration file. Maybe it's that one 4,200-line God class that everyone is too afraid to touch. LineJustice doesn't judge. It just makes sure you can still read the gutter.
+
+Absolute line numbers are automatically formatted with **thousands-separator commas** for any file long enough to need them:
+
+```
+  997  3  end
+  998  2
+  999  1  -- the calm before the storm
+1,000     ← cursor
+1,001  1  -- line one thousand and one
+1,002  2
+```
+
+The gutter width **expands automatically** as your file grows — no configuration needed, no truncation, no overlap. A 999-line file uses a 3-character gutter. A 1,000-line file promotes to 5 characters (`1,000`). A 10,000-line file uses 6 (`10,000`). It just works.
+
+And if you're pair programming on a file with comma-separated line numbers — well, at least you'll both be able to clearly agree on exactly which line of that monolith you're staring at together.
+
+---
+
 ## How It Works
 
 LineJustice delegates all statuscolumn rendering to [`statuscol.nvim`](https://github.com/luukvbaal/statuscol.nvim). It registers a single custom segment that fires for every rendered line, outputting:
 
-- The **absolute** line number (right-aligned, with thousands separators for large files)
+- The **absolute** line number (right-aligned, with **thousands-separator commas** on large files)
 - A blank relative column on the cursor line, or the **relative** distance on all other lines
 - On soft-wrapped continuation lines: the configured indicator character, centred in the gutter width
 
 All columns are fixed-width and highlight-aware — colours change based on whether a line is above or below the cursor.
+
+### Column-width formula
+
+The gutter width is computed fresh on every render from the total line count:
+
+```
+num_digits = #tostring(total_lines)          -- e.g. 4 for a 1000-line file
+num_commas = floor((num_digits - 1) / 3)     -- e.g. 1 comma in "1,000"
+col_w      = num_digits + num_commas         -- e.g. 5 chars for "1,000"
+gutter_w   = col_w + 1 + col_w              -- abs + space + rel
+```
+
+Both the absolute and relative columns always share the same width, so the gutter is perfectly symmetric regardless of how large the file grows.
 
 ## License
 

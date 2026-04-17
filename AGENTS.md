@@ -267,7 +267,7 @@ All helpers are `local` to `init.lua` and not exported.
 
 | Function | Signature | Purpose |
 |---|---|---|
-| `format_line_number(num)` | `number → string` | Formats integers with thousands-separator commas (e.g. `1234` → `"1,234"`). |
+| `format_line_number(num)` | `number → string` | Formats integers with thousands-separator commas (e.g. `1234` → `"1,234"`). Gutter width is computed from the formatted length, so columns expand automatically as the file grows. |
 | `numeric_to_hex(num)` | `number → string` | Converts a NeoVim colour integer to a `#rrggbb` hex string. |
 | `resolve_indicator(wl_cfg)` | `LineJusticeWrappedLines → string` | Validates and returns the indicator character; emits WARN for unknown/empty. |
 | `centre(str, width)` | `(string, number) → string` | Centres `str` in a field of `width` chars with space padding. |
@@ -303,7 +303,9 @@ local col_w      = num_digits + num_commas   -- accounts for thousands separator
 local gutter_w   = col_w + 1 + col_w
 ```
 
-This means columns automatically grow as the file grows — no manual width configuration needed.
+This means columns automatically grow as the file grows — no manual width configuration needed. A 999-line file uses a 3-char column; a 1,000-line file promotes to 5 chars (`1,000`); a 10,000-line file uses 6 chars (`10,000`). Both the real-line path and the wrapped-line path use the **exact same formula** — keep them in sync or the wrapped indicator will be off-centre.
+
+> **Note:** No code file _needs_ to be so long that its line numbers require a comma. But if it is, at least both people staring at the gutter during a pair-programming session will be looking at the same, clearly formatted number.
 
 ### `bt_ignore`
 
@@ -420,7 +422,7 @@ There is currently no automated test suite. All testing is manual. Before any no
 - [ ] **Wrapped lines** — all six built-in indicators render correctly; `Custom` with a character; `Custom` with empty string warns.
 - [ ] **Unknown theme name** — emits WARN, does not crash.
 - [ ] **Unknown indicator name** — emits WARN, falls back to blank.
-- [ ] **Large files** (10 000+ lines) — thousands separators render; column widths auto-expand; no performance degradation.
+- [ ] **Large files** (1,000+ lines) — thousands separators appear in both the absolute and relative columns; gutter widens automatically at the 1k/10k/100k boundaries; column widths are identical in both the real-line and wrapped-line code paths; no performance degradation at 10,000+ lines.
 - [ ] **Missing statuscol.nvim** — emits WARN, does not crash NeoVim.
 - [ ] **Plugin buffers** (file tree, dashboard, picker) — no custom statuscolumn applied.
 - [ ] **Multiple `setup()` calls** — no duplicate autocmds, no crash.
