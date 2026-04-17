@@ -12,6 +12,9 @@ You're pair programming and your colleague says _"Hey, there's a bug on line 42.
 
 Is it near the top? The middle? Nobody knows.
 
+<img width="400" height="279" alt="image" src="https://github.com/user-attachments/assets/d715531c-780d-4357-b997-55d8c0c889fa" />
+
+
 ## The Solution
 
 **LineJustice shows you both numbers at once — every line, always.**
