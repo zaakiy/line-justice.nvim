@@ -16,20 +16,19 @@ Or worse: a code review where someone references _"the line with the bug"_ in a 
 
 **LineJustice** shows you both numbers at once — every line, always:
 
-```
-  42   6  function handleRequest(req, res) {
-  43   5    const user = await getUser(req.params.id)
-  44   4    if (!user) {
-  45   3      return res.status(404).json({ error: 'Not found' })
-  46   2    }
-  47   1    ...
-  48      ←  cursor is here
-  49   1    return res.json(user)
-  50   2  }
-```
+42 &nbsp; 6 &nbsp; function handleRequest(req, res) {\
+43 &nbsp; 5 &nbsp;&nbsp;&nbsp; const user = await getUser(req.params.id)\
+44 &nbsp; 4 &nbsp;&nbsp;&nbsp; if (!user) {\
+45 &nbsp; 3 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return res.status(404).json({ error: 'Not found' })\
+46 &nbsp; 2 &nbsp;&nbsp;&nbsp; }\
+47 &nbsp; 1 &nbsp;&nbsp;&nbsp; ...\
+**48** &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ← cursor is here\
+49 &nbsp; 1 &nbsp;&nbsp;&nbsp; return res.json(user)\
+50 &nbsp; 2 }
 
 - The **left column** is the absolute line number — the true position in the file.
 - The **right column** is the relative distance from your cursor.
+- The **cursor line** (48) is shown in bold — no relative number, just your position.
 
 Now when your colleague says _"line 42"_, you both instantly see the same thing.
 When you need to jump, you use the relative number. When you reference, you use the absolute. No confusion.
@@ -74,13 +73,11 @@ Call `require("line-justice").setup(opts)` with any options you want to override
 
 ```lua
 require("line-justice").setup({
-  -- statuscol.nvim integration (required dependency)
   statuscol = {
     enabled     = true,
-    relculright = true, -- right-align cursor line number
-    preset      = nil,  -- Named colour preset. "horizon" uses the built-in palette.
-                        -- nil = auto-detect from your active colorscheme.
-    -- File types where LineJustice is disabled
+    relculright = true,  -- right-align cursor line number
+    preset      = nil,   -- named colour preset; "horizon" uses the built-in palette
+                         -- nil = auto-detect colours from your active colorscheme
     ft_ignore = {
       "help", "dashboard", "neo-tree", "NvimTree",
       "toggleterm", "terminal", "qf", "quickfix",
@@ -98,47 +95,8 @@ require("line-justice").setup({
       -- wrapped   = { fg = "#565f89", italic = true },
     },
   },
-
-  -- nvim-treesitter-context integration (optional)
-  treesitter_context = {
-    enabled      = true,
-    multiwindow  = true,
-    line_numbers = false, -- must be false to avoid alignment conflicts
-    separator    = "-",
-  },
-
-  -- mason-lspconfig integration (optional)
-  lsp = {
-    enabled          = true,
-    ensure_installed = { "ts_ls" },
-    automatic_enable = true,
-    keymaps = {
-      -- action = "key", e.g.:
-      hover = "K",
-      -- definition  = "gd",
-      -- references  = "gr",
-      -- rename      = "<leader>rn",
-      -- code_action = "<leader>ca",
-      -- format      = "<leader>f",
-    },
-  },
 })
 ```
-
-### Available LSP keymap actions
-
-| Action | Description |
-|---|---|
-| `hover` | Show hover documentation |
-| `definition` | Go to definition |
-| `references` | List references |
-| `declaration` | Go to declaration |
-| `type_definition` | Go to type definition |
-| `implementation` | Go to implementation |
-| `rename` | Rename symbol |
-| `code_action` | Open code actions |
-| `format` | Format buffer |
-| `signature_help` | Show signature help |
 
 ## Colour Presets
 
@@ -149,13 +107,13 @@ By default line-justice auto-detects colours from your active colorscheme. You c
 A cool blue-purple sky above the cursor, fresh green earth below. These are the author's original hand-crafted colours, designed for TokyoNight-family colorschemes but great on any dark theme.
 
 | Slot | Hex | Description |
-|---|---|
-| `cursor` | `#bb9af7` | Soft violet — cursor line number |
+|---|---|---|
+| `cursor` | `#bb9af7` | Soft violet, bold — cursor line number |
 | `abs_above` | `#565f89` | Muted blue-grey — absolute numbers above cursor |
 | `abs_below` | `#41664f` | Deep forest green — absolute numbers below cursor |
 | `rel_above` | `#7b9ac7` | Brighter steel blue — relative numbers above cursor |
 | `rel_below` | `#6aa781` | Brighter sage green — relative numbers below cursor |
-| `wrapped` | `#565f89` | Muted blue-grey, italicised — wrapped line indicator |
+| `wrapped` | `#565f89` | Muted blue-grey, italic — wrapped line indicator |
 
 ```lua
 -- Use the horizon preset:
@@ -179,30 +137,13 @@ require("line-justice").setup({
 When `preset` is `nil`, line-justice reads your colorscheme's built-in highlight groups and derives colours automatically. It re-resolves on every `:colorscheme` change.
 
 | Slot | Probed groups (first match wins) |
-|---|
+|---|---|
 | `cursor` | `CursorLineNr` |
 | `abs_above` | `LineNr` |
 | `abs_below` | `LineNrAbove`, `Comment` |
 | `rel_above` | `LineNr` |
 | `rel_below` | `LineNrBelow`, `String` |
 | `wrapped` | `NonText` |
-
-## nvim-treesitter-context Compatibility
-
-LineJustice can auto-configure `nvim-treesitter-context` for you when `treesitter_context.enabled = true` (the default). If you prefer to manage it yourself, set `treesitter_context.enabled = false` and apply these settings manually to avoid alignment issues:
-
-```lua
-{
-  "nvim-treesitter/nvim-treesitter-context",
-  opts = {
-    multiwindow  = true,
-    line_numbers = false, -- REQUIRED: prevents misalignment with statuscol
-    separator    = "-",
-  },
-}
-```
-
-> **Why?** treesitter-context renders its own line numbers that conflict with statuscol.nvim's custom gutter. Disabling them lets LineJustice control all numbering consistently. The separator gives a clear visual boundary between the context pane and content.
 
 ## How It Works
 
