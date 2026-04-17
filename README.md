@@ -10,7 +10,7 @@
 
 You're pair programming and your colleague says _"Hey, there's a bug on line 42."_ You look at your screen — is that 42 above or 42 below the cursor? They're looking at a different part of the file. You move the cursor. Line numbers change. Confusion ensues. You both waste five minutes finding the same line.
 
-Or worse: a code review where someone references _"the line with the bug"_ in a 500-line file. Is it near the top? The middle? Nobody knows.
+Is it near the top? The middle? Nobody knows.
 
 ## The Solution
 
