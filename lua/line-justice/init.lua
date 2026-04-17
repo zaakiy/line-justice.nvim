@@ -9,7 +9,7 @@ local defaults = {
     -- 0 = auto-detect based on total line count.
     abs_width = 0,
     -- Width (in characters) reserved for relative line numbers.
-    rel_width = 3,
+    rel_width = 2,
     -- Separator string shown between absolute and relative columns.
     separator = " ",
     -- Highlight groups for each column.
@@ -95,19 +95,15 @@ function M._build_statuscol()
 
   -- Format each column
   local abs_str = lpad(tostring(lnum), abs_w)
-  local rel_str
-  if relnum == 0 then
-    rel_str = lpad("0", rel_w)
-  else
-    rel_str = lpad(tostring(relnum), rel_w)
-  end
+  local rel_str, abs_hl_group, rel_hl_group
 
-  -- Choose highlight groups
-  local abs_hl_group, rel_hl_group
   if relnum == 0 then
+    -- Cursor line: relative column is blank, absolute gets cursor highlight
+    rel_str      = string.rep(" ", rel_w)
     abs_hl_group = cfg.cur_hl
     rel_hl_group = cfg.cur_hl
   else
+    rel_str      = lpad(tostring(relnum), rel_w)
     abs_hl_group = cfg.abs_hl
     rel_hl_group = cfg.rel_hl
   end

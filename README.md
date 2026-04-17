@@ -17,12 +17,12 @@ Or worse: a code review where someone references _"the line with the bug"_ in a 
 **LineJustice** shows you both numbers at once — every line, always:
 
 ```
-  42  16  function handleRequest(req, res) {
-  43  15    const user = await getUser(req.params.id)
-  44  14    if (!user) {
-  45  13      return res.status(404).json({ error: 'Not found' })
-  46  12    }
-  47  11    ...
+  42   6  function handleRequest(req, res) {
+  43   5    const user = await getUser(req.params.id)
+  44   4    if (!user) {
+  45   3      return res.status(404).json({ error: 'Not found' })
+  46   2    }
+  47   1    ...
   48      ←  cursor is here
   49   1    return res.json(user)
   50   2  }
@@ -75,7 +75,7 @@ require("line-justice").setup({
   line_numbers = {
     enabled   = true,
     abs_width = 0,       -- 0 = auto (based on total line count, min 3)
-    rel_width = 3,       -- reserved width for the relative column
+    rel_width = 2,       -- reserved width for the relative column
     separator = " ",     -- string between absolute and relative columns
     abs_hl    = "LineNr",        -- highlight group for absolute numbers
     rel_hl    = "LineNrAbove",   -- highlight group for relative numbers
