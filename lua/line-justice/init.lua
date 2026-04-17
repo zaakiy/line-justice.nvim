@@ -18,7 +18,11 @@
 ---@field enabled?     boolean              Enable statuscol integration (default: true)
 ---@field relculright? boolean              Right-align cursor line number (default: true)
 ---@field preset?      string               Named colour preset. One of: "horizon" (default: nil — auto-detect)
----@field ft_ignore?   string[]             File types where line-justice is disabled
+---@field ft_ignore?   string[]             File types where line-justice is disabled.
+---                                         Entries are matched case-insensitively.
+---                                         Glob wildcards are supported: "*" matches any sequence,
+---                                         "?" matches a single character.
+---                                         Examples: "neo-*", "Avante*", "snacks_*"
 ---@field highlights?  LineJusticeHighlights Per-key colour overrides; merged on top of preset / auto-detect
 
 ---@class LineJusticeConfig
@@ -37,8 +41,8 @@ local defaults = {
     ft_ignore = {
       "help",
       "dashboard",
-      "neo-tree",
-      "NvimTree",
+      "neo-*",          -- neo-tree, neo-git, ...
+      "*tree",          -- NvimTree, nvim-tree, ...
       "toggleterm",
       "terminal",
       "qf",
@@ -47,12 +51,10 @@ local defaults = {
       "prompt",
       "packer",
       "lspinfo",
-      "TelescopePrompt",
-      "avante",
-      "AvanteTodos",
+      "Telescope*",     -- TelescopePrompt, TelescopeResults, ...
+      "Avante*",        -- avante, AvanteTodos, ...
       "neominimap",
-      "grug-far",
-      "snacks_dashboard",
+      "snacks_*",       -- all snacks.nvim buffers
     },
     highlights = {},
   },
@@ -111,6 +113,69 @@ local FALLBACK_DEFAULTS = {
   rel_below = { fg = "#6aa781" },
   wrapped   = { fg = "#565f89", italic = true },
 }
+
+-- ---------------------------------------------------------------------------
+-- ft_ignore resolution
+-- ---------------------------------------------------------------------------
+
+---Resolve an ft_ignore list that may contain glob patterns and mixed-case
+---entries into a flat, deduplicated list of lowercase filetype strings that
+---statuscol.nvim's exact-match check can consume.
+---
+--- How it works:
+---   • Every entry is lowercased before matching, so "NvimTree" and "nvimtree"
+---     are treated identically.
+---   • Entries containing "*" or "?" are treated as glob patterns and expanded
+---     against all filetypes known to NeoVim (via `vim.fn.getcompletion`).
+---   • Entries without wildcards are kept as-is (after lowercasing) so they
+---     still work even if the filetype isn't known at startup time (e.g. a
+---     plugin that registers its filetype lazily).
+---   • The result is deduplicated.
+---
+---@param  raw string[]  Raw ft_ignore list from user / defaults config
+---@return string[]      Resolved, deduplicated, lowercased filetype list
+local function resolve_ft_ignore(raw)
+  local seen   = {}
+  local result = {}
+
+  for _, entry in ipairs(raw) do
+    local lower = entry:lower()
+
+    if lower:find("[%*%?]") then
+      -- Glob pattern: expand against all filetypes NeoVim knows about.
+      -- getcompletion returns filetype names; we match them case-insensitively
+      -- by lowercasing both sides.
+      local all_fts = vim.fn.getcompletion("", "filetype")
+      -- Convert the glob to a Lua pattern:
+      --   *  →  .*   (any sequence)
+      --   ?  →  .    (single character)
+      --   other special chars are escaped
+      local lua_pat = "^" .. lower
+        :gsub("([%.%+%-%^%$%(%)%[%]%%])", "%%%1") -- escape Lua specials
+        :gsub("%*", ".*")                           -- * → .*
+        :gsub("%?", ".")                            -- ? → .
+        .. "$"
+
+      for _, ft in ipairs(all_fts) do
+        local ft_lower = ft:lower()
+        if ft_lower:match(lua_pat) and not seen[ft_lower] then
+          seen[ft_lower] = true
+          result[#result + 1] = ft_lower
+        end
+      end
+    else
+      -- Plain entry (no wildcards): keep as-is after lowercasing.
+      -- We do NOT filter against getcompletion here so that filetypes
+      -- registered lazily (after setup) are still ignored correctly.
+      if not seen[lower] then
+        seen[lower] = true
+        result[#result + 1] = lower
+      end
+    end
+  end
+
+  return result
+end
 
 -- ---------------------------------------------------------------------------
 -- Helpers
@@ -267,10 +332,13 @@ function M._setup_statuscol()
     end,
   })
 
+  -- Resolve ft_ignore: expand wildcards and normalise case
+  local ft_ignore = resolve_ft_ignore(cfg.ft_ignore or {})
+
   -- Wire up statuscol with the dual-number segment
   statuscol.setup({
     relculright = cfg.relculright,
-    ft_ignore   = cfg.ft_ignore,
+    ft_ignore   = ft_ignore,
     segments = {
       {
         text = {

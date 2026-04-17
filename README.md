@@ -78,11 +78,19 @@ require("line-justice").setup({
     relculright = true,  -- right-align cursor line number
     preset      = nil,   -- named colour preset; "horizon" uses the built-in palette
                          -- nil = auto-detect colours from your active colorscheme
+    -- ft_ignore supports case-insensitive matching and glob wildcards:
+    --   *  matches any sequence of characters
+    --   ?  matches exactly one character
+    -- Matching is always case-insensitive, so "NvimTree" == "nvimtree".
     ft_ignore = {
-      "help", "dashboard", "neo-tree", "NvimTree",
+      "help", "dashboard",
+      "neo-*",        -- neo-tree, neo-git, ...
+      "*tree",        -- NvimTree, nvim-tree, ...
       "toggleterm", "terminal", "qf", "quickfix",
       "nofile", "prompt", "packer", "lspinfo",
-      "TelescopePrompt", "avante", "AvanteTodos", "neominimap",
+      "Telescope*",   -- TelescopePrompt, TelescopeResults, ...
+      "Avante*",      -- avante, AvanteTodos, ...
+      "neominimap", "snacks_*",
     },
     -- Per-key colour overrides merged on top of preset / auto-detect.
     -- Any key left out falls through to the preset or auto-detect.
@@ -97,6 +105,32 @@ require("line-justice").setup({
   },
 })
 ```
+
+### ft_ignore — wildcards and case-insensitivity
+
+`ft_ignore` entries are always matched **case-insensitively**, so `"NvimTree"` and `"nvimtree"` are equivalent.
+
+Entries may contain **glob wildcards**:
+
+| Wildcard | Meaning |
+|---|---|
+| `*` | Any sequence of characters (including empty) |
+| `?` | Exactly one character |
+
+Wildcard patterns are expanded at startup against all filetypes NeoVim knows about. Plain entries (no wildcards) are kept as-is and still match filetypes that register themselves lazily after startup.
+
+```lua
+ft_ignore = {
+  "neo-*",      -- matches neo-tree, neo-git, neo-composer, ...
+  "*tree",      -- matches NvimTree, nvim-tree, filetree, ...
+  "Telescope*", -- matches TelescopePrompt, TelescopeResults, ...
+  "Avante*",    -- matches avante, AvanteTodos, AvanteInput, ...
+  "snacks_*",   -- matches all snacks.nvim buffers
+  "help",       -- plain exact match (case-insensitive)
+}
+```
+
+---
 
 ## Colour Presets
 
