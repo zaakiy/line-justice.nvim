@@ -109,7 +109,7 @@ opts = {
     --   Any key you omit is left exactly as the theme/auto-detect defines it.
     --   All keys are optional; provide only the ones you want to change.
     overrides = {
-      -- CursorLine    = { fg = "#bb9af7", bold = true },
+      -- CursorLine    = { fg = "#FF966C", bold = true },
       -- AbsoluteAbove = { fg = "#565f89" },
       -- AbsoluteBelow = { fg = "#41664f" },
       -- RelativeAbove = { fg = "#7b9ac7" },
@@ -373,7 +373,7 @@ require("line-justice").setup({
   line_numbers = {
     theme = nil,
     overrides = {
-      CursorLine    = { fg = "#bb9af7", bold = true },
+      CursorLine    = { fg = "#FF966C", bold = true },
       AbsoluteAbove = { fg = "#565f89" },
       AbsoluteBelow = { fg = "#41664f" },
       RelativeAbove = { fg = "#7b9ac7" },

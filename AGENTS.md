@@ -215,7 +215,7 @@ Three themes ship out of the box. All are defined as `LineJusticeThemeSpec` file
 
 | Slot | Hex | Description |
 |---|---|---|
-| `CursorLine` | `#bb9af7` | Soft violet, bold |
+| `CursorLine` | `#FF966C` | Soft violet, bold |
 | `AbsoluteAbove` | `#565f89` | Muted blue-grey |
 | `AbsoluteBelow` | `#41664f` | Deep forest green |
 | `RelativeAbove` | `#7b9ac7` | Brighter steel blue |

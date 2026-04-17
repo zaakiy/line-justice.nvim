@@ -173,7 +173,7 @@ local WRAPPED_INDICATORS = {
 --
 ---@type LineJusticeOverrides
 local FALLBACK = {
-  CursorLine    = { fg = "#bb9af7", bold   = true },
+  CursorLine    = { fg = "#FF966C", bold   = true },
   AbsoluteAbove = { fg = "#565f89" },
   AbsoluteBelow = { fg = "#41664f" },
   RelativeAbove = { fg = "#7b9ac7" },

@@ -9,7 +9,7 @@
 -- ┌──────────────────┬──────────┬──────────────────────────────────────────┐
 -- │ Key              │ Hex      │ Description                              │
 -- ├──────────────────┼──────────┼──────────────────────────────────────────┤
--- │ CursorLine       │ #bb9af7  │ Soft violet, bold — stands out on cursor │
+-- │ CursorLine       │ #FF966C  │ Soft violet, bold — stands out on cursor │
 -- │ AbsoluteAbove    │ #565f89  │ Muted blue-grey — absolute nums above    │
 -- │ AbsoluteBelow    │ #41664f  │ Deep forest green — absolute below       │
 -- │ RelativeAbove    │ #7b9ac7  │ Brighter steel blue — relative above     │
@@ -20,10 +20,10 @@
 ---@type LineJusticeThemeSpec
 return {
   name        = "Horizon",
-  description = "Cool blue-purple sky above the cursor, fresh green earth below.",
+  description = "Cool blue-purple sky above the cursor, fresh green earth below. And the setting sun indicates the current line",
   author      = "Zak Siddiqui",
   colors = {
-    CursorLine    = { fg = "#bb9af7", bold   = true },
+    CursorLine    = { fg = "#FF966C", bold   = true },
     AbsoluteAbove = { fg = "#565f89" },
     AbsoluteBelow = { fg = "#41664f" },
     RelativeAbove = { fg = "#7b9ac7" },
