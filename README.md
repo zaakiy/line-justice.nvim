@@ -51,6 +51,7 @@ When you need to jump, you use the relative number. When you reference, you use 
 ### [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
+-- return    -- add if you don't already have it
 {
   "zaakiy/line-justice.nvim",
   dependencies = { "luukvbaal/statuscol.nvim" },
@@ -142,7 +143,7 @@ opts = {
 
   },
 
-},
+},    -- the comma may not be needed, depending on your situation
 ```
 
 ---
