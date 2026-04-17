@@ -59,6 +59,9 @@ When you need to jump, you use the relative number. When you reference, you use 
     line_numbers  = { theme = "Horizon" },
     wrapped_lines = { indicator = "None" },
   },
+  config = function(_, opts)
+    require("line-justice").setup(opts)
+  end,
 }
 ```
 
