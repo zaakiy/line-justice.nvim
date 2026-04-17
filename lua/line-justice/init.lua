@@ -555,7 +555,13 @@ end
 ---@param opts? LineJusticeConfig  Partial config; deep-merged with defaults
 function M.setup(opts)
   config = vim.tbl_deep_extend("force", defaults, opts or {})
-  M._setup_statuscol()
+  -- Defer statuscol wiring until after the current lazy-load batch has fully
+  -- initialised. Without this, statuscol.nvim may not yet be in the require
+  -- cache when setup() is called via event = "VeryLazy", causing the pcall
+  -- to silently fail and leaving the plugin inactive.
+  vim.schedule(function()
+    M._setup_statuscol()
+  end)
 end
 
 ---Return the current resolved configuration.
