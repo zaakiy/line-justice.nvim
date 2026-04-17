@@ -1,6 +1,5 @@
 -- line-justice.nvim plugin entry point
--- Sourced automatically by NeoVim. Registers user commands and guards
--- against double-loading.
+-- Sourced automatically by NeoVim. Guards against double-loading.
 
 if vim.g.loaded_line_justice then
   return
