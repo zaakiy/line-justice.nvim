@@ -78,6 +78,8 @@ require("line-justice").setup({
   statuscol = {
     enabled     = true,
     relculright = true, -- right-align cursor line number
+    preset      = nil,  -- Named colour preset. "horizon" uses the built-in palette.
+                        -- nil = auto-detect from your active colorscheme.
     -- File types where LineJustice is disabled
     ft_ignore = {
       "help", "dashboard", "neo-tree", "NvimTree",
@@ -85,15 +87,15 @@ require("line-justice").setup({
       "nofile", "prompt", "packer", "lspinfo",
       "TelescopePrompt", "avante", "AvanteTodos", "neominimap",
     },
-    -- Highlight group colours (any vim.api.nvim_set_hl-compatible table)
+    -- Per-key colour overrides merged on top of preset / auto-detect.
+    -- Any key left out falls through to the preset or auto-detect.
     highlights = {
-      abs        = { fg = "#7aa2f7" },           -- absolute numbers
-      abs_above  = { fg = "#565f89" },           -- absolute, above cursor
-      abs_below  = { fg = "#41664f" },           -- absolute, below cursor
-      cursor     = { fg = "#bb9af7", bold = true }, -- cursor line
-      rel_above  = { fg = "#7b9ac7" },           -- relative, above cursor
-      rel_below  = { fg = "#6aa781" },           -- relative, below cursor
-      wrapped    = { fg = "#565f89", italic = true }, -- wrapped line indicator
+      -- cursor    = { fg = "#bb9af7", bold = true },
+      -- abs_above = { fg = "#565f89" },
+      -- abs_below = { fg = "#41664f" },
+      -- rel_above = { fg = "#7b9ac7" },
+      -- rel_below = { fg = "#6aa781" },
+      -- wrapped   = { fg = "#565f89", italic = true },
     },
   },
 
@@ -137,6 +139,53 @@ require("line-justice").setup({
 | `code_action` | Open code actions |
 | `format` | Format buffer |
 | `signature_help` | Show signature help |
+
+## Colour Presets
+
+By default line-justice auto-detects colours from your active colorscheme. You can instead pin it to a named preset via `statuscol.preset`.
+
+### `horizon`
+
+A cool blue-purple sky above the cursor, fresh green earth below. These are the author's original hand-crafted colours, designed for TokyoNight-family colorschemes but great on any dark theme.
+
+| Slot | Hex | Description |
+|---|---|
+| `cursor` | `#bb9af7` | Soft violet — cursor line number |
+| `abs_above` | `#565f89` | Muted blue-grey — absolute numbers above cursor |
+| `abs_below` | `#41664f` | Deep forest green — absolute numbers below cursor |
+| `rel_above` | `#7b9ac7` | Brighter steel blue — relative numbers above cursor |
+| `rel_below` | `#6aa781` | Brighter sage green — relative numbers below cursor |
+| `wrapped` | `#565f89` | Muted blue-grey, italicised — wrapped line indicator |
+
+```lua
+-- Use the horizon preset:
+require("line-justice").setup({
+  statuscol = { preset = "horizon" },
+})
+
+-- Horizon preset with one colour overridden:
+require("line-justice").setup({
+  statuscol = {
+    preset = "horizon",
+    highlights = {
+      cursor = { fg = "#ff9e64", bold = true }, -- swap just the cursor colour
+    },
+  },
+})
+```
+
+### Auto-detect (default)
+
+When `preset` is `nil`, line-justice reads your colorscheme's built-in highlight groups and derives colours automatically. It re-resolves on every `:colorscheme` change.
+
+| Slot | Probed groups (first match wins) |
+|---|
+| `cursor` | `CursorLineNr` |
+| `abs_above` | `LineNr` |
+| `abs_below` | `LineNrAbove`, `Comment` |
+| `rel_above` | `LineNr` |
+| `rel_below` | `LineNrBelow`, `String` |
+| `wrapped` | `NonText` |
 
 ## nvim-treesitter-context Compatibility
 
