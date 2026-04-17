@@ -2,34 +2,39 @@
 -- ~/.config/nvim/lua/plugins/line-justice.lua
 --
 -- ─────────────────────────────────────────────────────────────────────────────
--- HOW COLOURS WORK
+-- WRAPPED-LINE INDICATOR
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- When a line is too long and wraps, NeoVim renders continuation lines in
+-- the gutter. line-justice can show a small indicator character there,
+-- centred in the gutter width, to visually distinguish wrapped continuations
+-- from real lines.
+--
+-- wrapped_lines.indicator  (string)
+--   "None"     — blank gutter, no character shown (default)
+--   "Arrow"    — ↳  classic turn-down arrow
+--   "Chevron"  — ›  single right-pointing chevron
+--   "Dot"      — ·  middle dot / interpunct
+--   "Ellipsis" — …  horizontal ellipsis
+--   "Bar"      — │  thin vertical bar
+--   "Custom"   — use whatever you set in wrapped_lines.custom
+--
+-- wrapped_lines.custom  (string)
+--   Only used when indicator = "Custom".
+--   Examples: "»", "⤷", "▸", "→", "╰"
+--
+-- ─────────────────────────────────────────────────────────────────────────────
+-- COLOUR THEMES
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- line_numbers.theme     (string | nil)
---   The name of a built-in colour palette.
---   "Horizon" — cool blue-purple sky above the cursor, fresh green below.
---               The author's original hand-crafted colours, designed for
---               TokyoNight-family colorschemes but great on any dark theme.
---   nil       — auto-detect colours from your active colorscheme instead.
+--   "Horizon" — built-in palette: cool blues above, greens below (default)
+--   nil       — auto-detect from your active colorscheme
 --
 -- line_numbers.overrides (table | nil)
---   Per-key colour tweaks applied ON TOP of the theme or auto-detect result.
---   Any key you omit is left exactly as the theme / auto-detect defines it.
---   Useful for swapping one or two colours without redefining everything.
---
--- Resolution priority (highest → lowest):
---   1. overrides  — your per-key tweaks
---   2. theme      — the named built-in palette
---   3. colorscheme auto-detect
---   4. hardcoded fallback (always something sensible)
---
--- Available override keys:
---   CursorLine    — the line the cursor is on
---   AbsoluteAbove — absolute numbers on lines above the cursor
---   AbsoluteBelow — absolute numbers on lines below the cursor
---   RelativeAbove — relative distance for lines above the cursor
---   RelativeBelow — relative distance for lines below the cursor
---   WrappedLine   — the ↳ indicator on soft-wrapped continuation lines
+--   Per-key tweaks on top of the theme or auto-detect.
+--   Keys: CursorLine, AbsoluteAbove, AbsoluteBelow,
+--         RelativeAbove, RelativeBelow, WrappedLine
 --
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -38,60 +43,74 @@ return {
   dependencies = { "luukvbaal/statuscol.nvim" },
   event = "VeryLazy",
 
-  -- ── Option A: Horizon theme (default) ─────────────────────────────────────
-  -- The out-of-the-box experience. No configuration required — just works.
+  -- ── Option A: defaults — Horizon theme, no wrapped indicator ──────────────
   opts = {
-    line_numbers = {
-      theme = "Horizon",
-    },
+    line_numbers  = { theme = "Horizon" },
+    wrapped_lines = { indicator = "None" },
   },
 
-  -- ── Option B: auto-detect colours from your colorscheme ───────────────────
-  -- Derives all colours from NeoVim's own highlight groups (LineNr,
-  -- CursorLineNr, etc.). Updates automatically on :colorscheme.
+  -- ── Option B: Arrow indicator (↳) ─────────────────────────────────────────
   -- opts = {
-  --   line_numbers = {
-  --     theme = nil,
+  --   line_numbers  = { theme = "Horizon" },
+  --   wrapped_lines = { indicator = "Arrow" },  -- ↳
+  -- },
+
+  -- ── Option C: Chevron indicator (›) ───────────────────────────────────────
+  -- opts = {
+  --   line_numbers  = { theme = "Horizon" },
+  --   wrapped_lines = { indicator = "Chevron" }, -- ›
+  -- },
+
+  -- ── Option D: Dot indicator (·) ───────────────────────────────────────────
+  -- opts = {
+  --   line_numbers  = { theme = "Horizon" },
+  --   wrapped_lines = { indicator = "Dot" },     -- ·
+  -- },
+
+  -- ── Option E: Ellipsis indicator (…) ──────────────────────────────────────
+  -- opts = {
+  --   line_numbers  = { theme = "Horizon" },
+  --   wrapped_lines = { indicator = "Ellipsis" }, -- …
+  -- },
+
+  -- ── Option F: Bar indicator (│) ───────────────────────────────────────────
+  -- opts = {
+  --   line_numbers  = { theme = "Horizon" },
+  --   wrapped_lines = { indicator = "Bar" },     -- │
+  -- },
+
+  -- ── Option G: Custom indicator ────────────────────────────────────────────
+  -- Use any character you like. Some ideas: "»" "⤷" "▸" "→" "╰"
+  -- opts = {
+  --   line_numbers  = { theme = "Horizon" },
+  --   wrapped_lines = {
+  --     indicator = "Custom",
+  --     custom    = "⤷",
   --   },
   -- },
 
-  -- ── Option C: Horizon theme with one colour overridden ────────────────────
-  -- Keeps all of Horizon's colours except the cursor line, which is swapped
-  -- to a warm orange. Any key left out stays as Horizon defines it.
+  -- ── Option H: auto-detect colours + custom indicator ──────────────────────
+  -- opts = {
+  --   line_numbers  = { theme = nil },           -- derive from colorscheme
+  --   wrapped_lines = { indicator = "Arrow" },
+  -- },
+
+  -- ── Option I: full control ────────────────────────────────────────────────
   -- opts = {
   --   line_numbers = {
   --     theme = "Horizon",
   --     overrides = {
-  --       CursorLine = { fg = "#ff9e64", bold = true },
-  --     },
-  --   },
-  -- },
-
-  -- ── Option D: auto-detect with selective overrides ────────────────────────
-  -- Uses your colorscheme for most colours but pins a couple of specific ones.
-  -- opts = {
-  --   line_numbers = {
-  --     theme = nil,
-  --     overrides = {
-  --       AbsoluteAbove = { fg = "#7aa2f7" },
-  --       RelativeBelow = { fg = "#9ece6a" },
-  --     },
-  --   },
-  -- },
-
-  -- ── Option E: fully manual — take complete control ────────────────────────
-  -- All six keys provided. Neither the theme nor auto-detect is used.
-  -- opts = {
-  --   line_numbers = {
-  --     theme = nil,
-  --     overrides = {
-  --       CursorLine    = { fg = "#bb9af7", bold = true },
+  --       CursorLine    = { fg = "#ff9e64", bold = true },
   --       AbsoluteAbove = { fg = "#565f89" },
   --       AbsoluteBelow = { fg = "#41664f" },
   --       RelativeAbove = { fg = "#7b9ac7" },
   --       RelativeBelow = { fg = "#6aa781" },
   --       WrappedLine   = { fg = "#565f89", italic = true },
   --     },
+  --   },
+  --   wrapped_lines = {
+  --     indicator = "Custom",
+  --     custom    = "╰",
   --   },
   -- },
 }

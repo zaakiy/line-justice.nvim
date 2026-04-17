@@ -48,7 +48,8 @@ When you need to jump, you use the relative number. When you reference, you use 
   dependencies = { "luukvbaal/statuscol.nvim" },
   event = "VeryLazy",
   opts = {
-    line_numbers = { theme = "Horizon" },
+    line_numbers  = { theme = "Horizon" },
+    wrapped_lines = { indicator = "None" },
   },
 }
 ```
@@ -61,7 +62,8 @@ use {
   requires = { "luukvbaal/statuscol.nvim" },
   config = function()
     require("line-justice").setup({
-      line_numbers = { theme = "Horizon" },
+      line_numbers  = { theme = "Horizon" },
+      wrapped_lines = { indicator = "None" },
     })
   end,
 }
@@ -79,6 +81,7 @@ Call `require("line-justice").setup(opts)` with any options you want to override
 
 ```lua
 require("line-justice").setup({
+
   line_numbers = {
 
     -- theme (string | nil)
@@ -100,30 +103,75 @@ require("line-justice").setup({
     },
 
   },
+
+  wrapped_lines = {
+
+    -- indicator (string)
+    --   Named indicator preset shown in the gutter of soft-wrapped
+    --   continuation lines, centred in the gutter width.
+    --   Default: "None" (blank — no character shown).
+    --
+    --   "None"     — blank gutter
+    --   "Arrow"    — ↳
+    --   "Chevron"  — ›
+    --   "Dot"      — ·
+    --   "Ellipsis" — …
+    --   "Bar"      — │
+    --   "Custom"   — use the string in wrapped_lines.custom
+    indicator = "None",
+
+    -- custom (string)
+    --   Only used when indicator = "Custom".
+    --   Set this to any character or short string you want to display.
+    --   Examples: "»", "⤷", "▸", "→", "╰"
+    -- custom = "⤷",
+
+  },
+
 })
 ```
 
-### Colour keys
+---
 
-| Key | What it colours |
-|---|---|
-| `CursorLine` | The line the cursor is currently on |
-| `AbsoluteAbove` | Absolute line numbers on lines above the cursor |
-| `AbsoluteBelow` | Absolute line numbers on lines below the cursor |
-| `RelativeAbove` | Relative distance for lines above the cursor |
-| `RelativeBelow` | Relative distance for lines below the cursor |
-| `WrappedLine` | The ↳ indicator on soft-wrapped continuation lines |
+## Wrapped-line Indicator
 
-### Colour resolution priority
+When a line is too long for the window and wraps, NeoVim renders the continuation as a virtual line. `wrapped_lines.indicator` controls what appears in the gutter of those virtual lines, **centred** in the gutter width.
 
-When determining a colour, line-justice works through this chain and stops at the first result:
+### Built-in indicators
 
-| Priority | Source | Set via |
+| Name | Character | Description |
 |---|---|---|
-| 1 (highest) | `overrides` | `line_numbers.overrides = { Key = { fg = "..." } }` |
-| 2 | Named theme | `line_numbers.theme = "Horizon"` |
-| 3 | Colorscheme auto-detect | `line_numbers.theme = nil` |
-| 4 (lowest) | Hardcoded fallback | always active; mirrors the Horizon palette |
+| `"None"` | _(blank)_ | No character — gutter is fully empty **(default)** |
+| `"Arrow"` | ↳ | Classic turn-down arrow — "continued from above" |
+| `"Chevron"` | › | Single right-pointing chevron — lightweight directional hint |
+| `"Dot"` | · | Middle dot / interpunct — subtle and minimal |
+| `"Ellipsis"` | … | Horizontal ellipsis — "more content continues" |
+| `"Bar"` | │ | Thin vertical bar — structural / tree-style |
+| `"Custom"` | _your string_ | Whatever you put in `wrapped_lines.custom` |
+
+### Custom indicator
+
+Set `indicator = "Custom"` and put your character in `custom`:
+
+```lua
+wrapped_lines = {
+  indicator = "Custom",
+  custom    = "⤷",   -- or: "»", "▸", "→", "╰", or any string you like
+},
+```
+
+### Colour of the indicator
+
+The indicator inherits the `WrappedLine` colour from your `line_numbers` theme or overrides:
+
+```lua
+line_numbers = {
+  theme = "Horizon",
+  overrides = {
+    WrappedLine = { fg = "#ff9e64", italic = true }, -- change indicator colour
+  },
+},
+```
 
 ---
 
@@ -155,31 +203,70 @@ When `theme` is `nil`, line-justice reads your colorscheme's built-in highlight 
 | `RelativeBelow` | `LineNrBelow`, `String` |
 | `WrappedLine` | `NonText` |
 
+### Colour resolution priority
+
+| Priority | Source | Set via |
+|---|---|---|
+| 1 (highest) | `overrides` | `line_numbers.overrides = { Key = { fg = "..." } }` |
+| 2 | Named theme | `line_numbers.theme = "Horizon"` |
+| 3 | Colorscheme auto-detect | `line_numbers.theme = nil` |
+| 4 (lowest) | Hardcoded fallback | always active; mirrors the Horizon palette |
+
 ---
 
 ## Examples
 
 ### Just use the defaults
-No configuration required — Horizon is active out of the box:
+Horizon theme, no wrapped indicator — no configuration required:
 ```lua
 require("line-justice").setup()
 ```
 
-### Use the Horizon theme explicitly
+### Arrow indicator on wrapped lines
 ```lua
 require("line-justice").setup({
-  line_numbers = {
-    theme = "Horizon",
+  wrapped_lines = { indicator = "Arrow" },  -- ↳
+})
+```
+
+### Chevron indicator
+```lua
+require("line-justice").setup({
+  wrapped_lines = { indicator = "Chevron" },  -- ›
+})
+```
+
+### Custom indicator
+```lua
+require("line-justice").setup({
+  wrapped_lines = {
+    indicator = "Custom",
+    custom    = "⤷",
   },
 })
 ```
 
-### Auto-detect colours from your colorscheme
+### Custom indicator with a custom colour
 ```lua
 require("line-justice").setup({
   line_numbers = {
-    theme = nil,
+    theme = "Horizon",
+    overrides = {
+      WrappedLine = { fg = "#ff9e64", italic = true },
+    },
   },
+  wrapped_lines = {
+    indicator = "Custom",
+    custom    = "╰",
+  },
+})
+```
+
+### Auto-detect colours + Arrow indicator
+```lua
+require("line-justice").setup({
+  line_numbers  = { theme = nil },
+  wrapped_lines = { indicator = "Arrow" },
 })
 ```
 
@@ -202,29 +289,15 @@ require("line-justice").setup({
   line_numbers = {
     theme = "Horizon",
     overrides = {
-      CursorLine    = { fg = "#ff9e64", bold = true },  -- warm orange cursor
-      AbsoluteBelow = { fg = "#73daca" },               -- teal below
-      RelativeBelow = { fg = "#73daca" },               -- teal relative below
-    },
-  },
-})
-```
-
-### Override colours on top of auto-detect
-```lua
-require("line-justice").setup({
-  line_numbers = {
-    theme = nil,   -- start from your colorscheme
-    overrides = {
-      AbsoluteAbove = { fg = "#7aa2f7" },  -- pin absolute-above to a specific blue
-      RelativeBelow = { fg = "#9ece6a" },  -- pin relative-below to a specific green
+      CursorLine    = { fg = "#ff9e64", bold = true },
+      AbsoluteBelow = { fg = "#73daca" },
+      RelativeBelow = { fg = "#73daca" },
     },
   },
 })
 ```
 
 ### Fully manual — take complete control
-Set `theme = nil` and provide all six keys in `overrides`. Neither the theme nor auto-detect is used for the keys you supply:
 ```lua
 require("line-justice").setup({
   line_numbers = {
@@ -238,6 +311,10 @@ require("line-justice").setup({
       WrappedLine   = { fg = "#565f89", italic = true },
     },
   },
+  wrapped_lines = {
+    indicator = "Custom",
+    custom    = "╰",
+  },
 })
 ```
 
@@ -249,7 +326,7 @@ LineJustice delegates all statuscolumn rendering to [`statuscol.nvim`](https://g
 
 - The **absolute** line number (right-aligned, with thousands separators for large files)
 - A blank relative column on the cursor line, or the **relative** distance on all other lines
-- A `↳` indicator for soft-wrapped continuation lines
+- On soft-wrapped continuation lines: the configured indicator character, centred in the gutter width
 
 All columns are fixed-width and highlight-aware — colours change based on whether a line is above or below the cursor.
 
