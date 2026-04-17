@@ -20,6 +20,12 @@
 -- │    2. line_numbers.theme      (named built-in palette)                  │
 -- │    3. colorscheme auto-detect (NeoVim's own highlight groups)           │
 -- │    4. Hardcoded fallback      (always something sensible)               │
+-- │                                                                          │
+-- │  Theme management:                                                       │
+-- │    require("line-justice").themes.register(spec)  register custom theme  │
+-- │    require("line-justice").themes.list()           list all themes        │
+-- │    require("line-justice").themes.exists(name)     check if theme exists  │
+-- │    require("line-justice").themes.get(name)        get theme colors table │
 -- └──────────────────────────────────────────────────────────────────────────┘
 
 -- ---------------------------------------------------------------------------
@@ -45,9 +51,11 @@
 ---Settings for the line-number columns.
 ---
 ---@class LineJusticeLineNumbers
----@field theme?     string                Name of a built-in colour palette.
----                                        "Horizon" = cool blues above, greens below.
----                                        nil       = auto-detect from your colorscheme.
+---@field theme?     string                Name of a built-in or registered colour palette.
+---                                        "Horizon"  = cool blues above, greens below (default).
+---                                        "Dawn"     = warm amber and rose tones.
+---                                        "Midnight" = cool monochrome blue-greys.
+---                                        nil        = auto-detect from your colorscheme.
 ---@field overrides? LineJusticeOverrides  Per-key colour overrides applied on top of
 ---                                        the named theme or auto-detect result.
 ---                                        Any key left out falls through unchanged.
@@ -112,6 +120,17 @@ local config = {}
 local M = {}
 
 -- ---------------------------------------------------------------------------
+-- Theme registry (public sub-module)
+-- ---------------------------------------------------------------------------
+--
+-- Exposed as require("line-justice").themes so that developers can register
+-- custom themes before or after calling setup().
+--
+-- See lua/line-justice/themes/init.lua for the full registry API.
+--
+M.themes = require("line-justice.themes")
+
+-- ---------------------------------------------------------------------------
 -- Built-in wrapped-line indicator presets
 -- ---------------------------------------------------------------------------
 --
@@ -139,41 +158,6 @@ local WRAPPED_INDICATORS = {
   Ellipsis = "…",
   Bar      = "│",
   -- "Custom" is handled separately — its value comes from wrapped_lines.custom
-}
-
--- ---------------------------------------------------------------------------
--- Built-in colour themes (palettes)
--- ---------------------------------------------------------------------------
---
--- Each entry in THEMES is a complete LineJusticeOverrides-compatible table.
--- Add more themes here in future; they become available immediately via
--- line_numbers.theme = "<name>".
---
--- ┌──────────────┬──────────┬────────────────────────────────────────────┐
--- │ Key          │ Hex      │ Description                                │
--- ├──────────────┼──────────┼────────────────────────────────────────────┤
--- │ CursorLine   │ #bb9af7  │ Soft violet, bold — stands out on cursor   │
--- │ AbsoluteAbove│ #565f89  │ Muted blue-grey — absolute nums above      │
--- │ AbsoluteBelow│ #41664f  │ Deep forest green — absolute nums below    │
--- │ RelativeAbove│ #7b9ac7  │ Brighter steel blue — relative nums above  │
--- │ RelativeBelow│ #6aa781  │ Brighter sage green — relative nums below  │
--- │ WrappedLine  │ #565f89  │ Same blue-grey as AbsoluteAbove, italic    │
--- └──────────────┴──────────┴────────────────────────────────────────────┘
---
----@type table<string, LineJusticeOverrides>
-local THEMES = {
-  -- "Horizon"
-  -- Inspired by a crisp horizon line: cool blue-purple sky above the cursor,
-  -- fresh green earth below. Original hand-crafted colours by the author,
-  -- tuned for TokyoNight-family colorschemes but great on any dark theme.
-  Horizon = {
-    CursorLine    = { fg = "#bb9af7", bold   = true },
-    AbsoluteAbove = { fg = "#565f89" },
-    AbsoluteBelow = { fg = "#41664f" },
-    RelativeAbove = { fg = "#7b9ac7" },
-    RelativeBelow = { fg = "#6aa781" },
-    WrappedLine   = { fg = "#565f89", italic = true },
-  },
 }
 
 -- ---------------------------------------------------------------------------
@@ -379,16 +363,14 @@ function M._setup_statuscol()
   local ln_cfg = config.line_numbers
   local wl_cfg = config.wrapped_lines
 
-  -- Resolve the named theme into a concrete colour table
+  -- Resolve the named theme into a concrete colour table via the registry
   local theme_tbl = {}
   if ln_cfg.theme then
-    theme_tbl = THEMES[ln_cfg.theme]
-    if not theme_tbl then
-      vim.notify(
-        "[line-justice] Unknown theme '" .. ln_cfg.theme .. "'. "
-          .. "Available themes: " .. table.concat(vim.tbl_keys(THEMES), ", "),
-        vim.log.levels.WARN
-      )
+    local resolved = M.themes.get(ln_cfg.theme)
+    if resolved then
+      theme_tbl = resolved
+    else
+      -- themes.get() already emitted the WARN; just continue with empty table
       theme_tbl = {}
     end
   end
@@ -491,6 +473,42 @@ end
 ---
 ---   require("line-justice").setup()
 ---
+--- ── Choosing a built-in theme ─────────────────────────────────────────────
+---
+--- Three themes ship out of the box:
+---
+---   require("line-justice").setup({
+---     line_numbers = { theme = "Horizon" },   -- default: blue-purple / green
+---   })
+---   require("line-justice").setup({
+---     line_numbers = { theme = "Dawn" },      -- warm amber and rose tones
+---   })
+---   require("line-justice").setup({
+---     line_numbers = { theme = "Midnight" },  -- cool monochrome blue-greys
+---   })
+---
+--- ── Registering a custom theme before setup ───────────────────────────────
+---
+--- Register the theme first, then call setup() as usual:
+---
+---   local lj = require("line-justice")
+---
+---   lj.themes.register({
+---     name        = "Forest",
+---     description = "Deep greens and mossy tones.",
+---     author      = "Jane Dev",
+---     colors = {
+---       CursorLine    = { fg = "#a8ff78", bold   = true },
+---       AbsoluteAbove = { fg = "#4a7c59" },
+---       AbsoluteBelow = { fg = "#2e5b3a" },
+---       RelativeAbove = { fg = "#6dbf8a" },
+---       RelativeBelow = { fg = "#4c9e6a" },
+---       WrappedLine   = { fg = "#4a7c59", italic = true },
+---     },
+---   })
+---
+---   lj.setup({ line_numbers = { theme = "Forest" } })
+---
 --- ── Named wrapped-line indicator ──────────────────────────────────────────
 ---
 --- Show the built-in Arrow indicator (↳) on soft-wrapped continuation lines,
@@ -524,24 +542,11 @@ end
 --- More custom examples:
 ---   custom = "»"   custom = "▸"   custom = "→"   custom = "╰"
 ---
---- ── Wrapped indicator + colour theme ──────────────────────────────────────
----
---- Both sections are independent and fully composable:
----
----   require("line-justice").setup({
----     line_numbers = {
----       theme = "Horizon",
----     },
----     wrapped_lines = {
----       indicator = "Chevron",  -- ›
----     },
----   })
----
 --- ── Full configuration example ────────────────────────────────────────────
 ---
 ---   require("line-justice").setup({
 ---     line_numbers = {
----       theme = "Horizon",           -- named palette
+---       theme = "Horizon",
 ---       overrides = {
 ---         CursorLine = { fg = "#ff9e64", bold = true },  -- one tweak
 ---       },

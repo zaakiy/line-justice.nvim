@@ -182,40 +182,95 @@ line_numbers = {
 
 ## Built-in Themes
 
-### `"Horizon"` _(default)_
+Three colour themes ship out of the box:
 
-A cool blue-purple sky above the cursor, fresh green earth below. The author's original hand-crafted colours, designed for TokyoNight-family colorschemes but great on any dark theme.
-
-| Key | Hex | Description |
+| Name | Vibe | Best with |
 |---|---|---|
-| `CursorLine` | `#bb9af7` | Soft violet, bold |
-| `AbsoluteAbove` | `#565f89` | Muted blue-grey |
-| `AbsoluteBelow` | `#41664f` | Deep forest green |
-| `RelativeAbove` | `#7b9ac7` | Brighter steel blue |
-| `RelativeBelow` | `#6aa781` | Brighter sage green |
-| `WrappedLine` | `#565f89` | Muted blue-grey, italic |
+| `"Horizon"` | Cool blue-purple above, green below | TokyoNight, Catppuccin Mocha, any dark theme |
+| `"Dawn"` | Warm amber and rose tones | Rosé Pine, Catppuccin Latte, Gruvbox |
+| `"Midnight"` | Cool monochrome blue-greys | GitHub Dark, Zephyr, Moonfly |
 
-### Auto-detect _(theme = nil)_
+```lua
+require("line-justice").setup({
+  line_numbers = { theme = "Horizon" },   -- default
+  -- line_numbers = { theme = "Dawn" },
+  -- line_numbers = { theme = "Midnight" },
+})
+```
 
-When `theme` is `nil`, line-justice reads your colorscheme's built-in highlight groups and derives colours automatically. Colours update on every `:colorscheme` change.
+Set `theme = nil` to auto-detect colours from your active colorscheme instead.
 
-| Key | Probed NeoVim highlight groups (first match wins) |
+---
+
+## Custom Themes
+
+You can register your own colour themes at runtime using the theme registry:
+
+```lua
+local lj = require("line-justice")
+
+-- 1. Define and register your theme
+lj.themes.register({
+  name        = "Forest",
+  description = "Deep greens and mossy tones.",
+  author      = "Your Name",          -- optional
+  colors = {
+    CursorLine    = { fg = "#a8ff78", bold   = true },
+    AbsoluteAbove = { fg = "#4a7c59" },
+    AbsoluteBelow = { fg = "#2e5b3a" },
+    RelativeAbove = { fg = "#6dbf8a" },
+    RelativeBelow = { fg = "#4c9e6a" },
+    WrappedLine   = { fg = "#4a7c59", italic = true },
+  },
+})
+
+-- 2. Use it in setup
+lj.setup({
+  line_numbers = { theme = "Forest" },
+})
+```
+
+### Color slots
+
+| Slot | Applied to |
 |---|---|
-| `CursorLine` | `CursorLineNr` |
-| `AbsoluteAbove` | `LineNr` |
-| `AbsoluteBelow` | `LineNrAbove`, `Comment` |
-| `RelativeAbove` | `LineNr` |
-| `RelativeBelow` | `LineNrBelow`, `String` |
-| `WrappedLine` | `NonText` |
+| `CursorLine` | Absolute **and** relative columns on the cursor row |
+| `AbsoluteAbove` | Absolute line numbers above the cursor |
+| `AbsoluteBelow` | Absolute line numbers below the cursor |
+| `RelativeAbove` | Relative distances above the cursor |
+| `RelativeBelow` | Relative distances below the cursor |
+| `WrappedLine` | The indicator character on soft-wrapped continuation lines |
 
-### Colour resolution priority
+All six slots are recommended. Any slot you omit falls through to colorscheme auto-detect or the built-in fallback (Horizon palette).
 
-| Priority | Source | Set via |
-|---|---|---|
-| 1 (highest) | `overrides` | `line_numbers.overrides = { Key = { fg = "..." } }` |
-| 2 | Named theme | `line_numbers.theme = "Horizon"` |
-| 3 | Colorscheme auto-detect | `line_numbers.theme = nil` |
-| 4 (lowest) | Hardcoded fallback | always active; mirrors the Horizon palette |
+### Theme registry API
+
+```lua
+local themes = require("line-justice").themes
+
+themes.register(spec)   -- register (or overwrite) a theme; returns true/false
+themes.get("Forest")    -- returns the colors table, or nil if not found
+themes.list()           -- sorted list of all available theme names
+themes.exists("Forest") -- true if the name is registered or built-in
+```
+
+### Shipping a theme as a standalone file or plugin
+
+```lua
+-- my-lj-theme.lua (loaded after line-justice.nvim)
+local ok, lj = pcall(require, "line-justice")
+if not ok then return end
+
+lj.themes.register({
+  name   = "MyTheme",
+  description = "My personal palette.",
+  colors = { ... },
+})
+```
+
+With lazy.nvim, add `dependencies = { "zaakiy/line-justice.nvim" }` to ensure load order.
+
+See [`examples/custom-theme.lua`](examples/custom-theme.lua) for three fully-annotated example themes.
 
 ---
 

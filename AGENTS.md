@@ -19,7 +19,7 @@
 9. [statuscol.nvim Integration](#9-statuscolnvim-integration)
 10. [Development Guidelines](#10-development-guidelines)
 11. [Adding a New Feature — Step-by-step](#11-adding-a-new-feature--step-by-step)
-12. [Adding a New Theme](#12-adding-a-new-theme)
+12. [Theme Config Management](#12-theme-config-management)
 13. [Adding a New Wrapped-Line Indicator Preset](#13-adding-a-new-wrapped-line-indicator-preset)
 14. [Testing Checklist](#14-testing-checklist)
 15. [Common Issues & Fixes](#15-common-issues--fixes)
@@ -53,11 +53,17 @@ All rendering is delegated to [`luukvbaal/statuscol.nvim`](https://github.com/lu
 line-justice.nvim/
 ├── lua/
 │   └── line-justice/
-│       └── init.lua          ← ALL plugin logic lives here (~567 lines)
+│       ├── init.lua                ← Plugin entry point, config, statuscol wiring
+│       └── themes/
+│           ├── init.lua            ← Theme registry (register, get, list, exists)
+│           ├── horizon.lua         ← Built-in Horizon theme spec
+│           ├── dawn.lua            ← Built-in Dawn theme spec
+│           └── midnight.lua        ← Built-in Midnight theme spec
 ├── plugin/
 │   └── line-justice.lua      ← Auto-sourced entry point; double-load guard + version check
 ├── examples/
-│   └── lazy-spec.lua         ← Full lazy.nvim plugin spec with Options A–I
+│   ├── lazy-spec.lua         ← Full lazy.nvim plugin spec with Options A–I
+│   └── custom-theme.lua      ← Annotated example showing how to author and register a custom theme
 ├── README.md                 ← End-user documentation
 ├── SYSTEM_PROMPT.md          ← AI-assistant development context (gitignored)
 ├── LICENSE                   ← Apache 2.0
@@ -68,7 +74,12 @@ line-justice.nvim/
 
 | File | Role |
 |---|---|
-| `lua/line-justice/init.lua` | Single-file plugin. Contains types, defaults, themes, helpers, highlight resolution, statuscol wiring, and public API. |
+| `lua/line-justice/init.lua` | Plugin entry point. Contains types, defaults, helpers, highlight resolution, statuscol wiring, and public API. Theme data moved to `themes/`. |
+| `lua/line-justice/themes/init.lua` | Theme registry. Exposes `register()`, `get()`, `list()`, `exists()`. Loads built-in specs lazily. |
+| `lua/line-justice/themes/horizon.lua` | Horizon theme spec (`LineJusticeThemeSpec`). |
+| `lua/line-justice/themes/dawn.lua` | Dawn theme spec — warm amber and rose tones. |
+| `lua/line-justice/themes/midnight.lua` | Midnight theme spec — cool monochrome blue-greys. |
+| `examples/custom-theme.lua` | Annotated example showing how to author and register a custom theme. |
 | `plugin/line-justice.lua` | NeoVim auto-sources everything under `plugin/`. This file sets `vim.g.loaded_line_justice` to prevent double-loading and checks `nvim-0.10`. |
 | `examples/lazy-spec.lua` | Not loaded by NeoVim. Purely illustrative for users installing via lazy.nvim. |
 | `SYSTEM_PROMPT.md` | Listed in `.gitignore`. Not shipped. Used for AI-assisted development sessions. |
@@ -88,7 +99,8 @@ M.setup(opts)
         ├─ require("statuscol")            [errors with vim.notify WARN if absent]
         │
         ├─ Resolve theme table
-        │    THEMES[config.line_numbers.theme]  or {}
+        │    M.themes.get(config.line_numbers.theme)  or {}
+        │    (loads from themes/init.lua registry; built-ins lazy-loaded)
         │
         ├─ resolve_indicator(config.wrapped_lines)
         │    → indicator_char  (string, may be "")
@@ -195,7 +207,11 @@ When `theme = nil`, each colour slot probes a list of NeoVim highlight groups in
 | `RelativeBelow` | `LineNrBelow`, `String` |
 | `WrappedLine` | `NonText` |
 
-### Built-in theme: Horizon
+### Built-in themes
+
+Three themes ship out of the box. All are defined as `LineJusticeThemeSpec` files under `lua/line-justice/themes/` and loaded lazily by the registry.
+
+#### Horizon (default)
 
 | Slot | Hex | Description |
 |---|---|---|
@@ -205,6 +221,28 @@ When `theme = nil`, each colour slot probes a list of NeoVim highlight groups in
 | `RelativeAbove` | `#7b9ac7` | Brighter steel blue |
 | `RelativeBelow` | `#6aa781` | Brighter sage green |
 | `WrappedLine` | `#565f89` | Muted blue-grey, italic |
+
+#### Dawn
+
+| Slot | Hex | Description |
+|---|---|---|
+| `CursorLine` | `#d4885a` | Warm amber-orange, bold |
+| `AbsoluteAbove` | `#9a7560` | Muted earth brown |
+| `AbsoluteBelow` | `#7d5c3b` | Deeper wood brown |
+| `RelativeAbove` | `#c9a87c` | Sandy gold |
+| `RelativeBelow` | `#b07d5e` | Terracotta |
+| `WrappedLine` | `#9a7560` | Earth brown, italic |
+
+#### Midnight
+
+| Slot | Hex | Description |
+|---|---|---|
+| `CursorLine` | `#a9b1d6` | Pale blue-white, bold |
+| `AbsoluteAbove` | `#4e5579` | Cool dark slate |
+| `AbsoluteBelow` | `#3b4068` | Deeper navy slate |
+| `RelativeAbove` | `#6c7494` | Medium slate blue |
+| `RelativeBelow` | `#565e7a` | Softer slate |
+| `WrappedLine` | `#4e5579` | Dark slate, italic |
 
 ### ColorScheme autocmd
 
@@ -254,6 +292,18 @@ require("line-justice").setup({
 ### `require("line-justice").get_config()`
 
 Returns the current resolved `LineJusticeConfig` table. Useful for debugging or reading settings in another plugin.
+
+### `require("line-justice").themes` _(sub-module)_
+
+The theme registry, exposed as a public sub-module. See [Section 12](#12-theme-config-management) for the full API reference.
+
+```lua
+local themes = require("line-justice").themes
+themes.register(spec)    -- register a custom theme
+themes.list()            -- list all available theme names
+themes.exists("Dawn")   -- check if a theme is available
+themes.get("Midnight")  -- get a theme's colors table
+```
 
 ### `M._setup_statuscol()` _(private)_
 
@@ -377,24 +427,100 @@ The `INTERNAL` table (`bt_ignore`, `relculright`) is intentionally hidden from u
 
 ---
 
-## 12. Adding a New Theme
+## 12. Theme Config Management
 
-All themes live in the `THEMES` table in `init.lua`. To add one:
+### Architecture
+
+Themes are managed by a dedicated registry module at `lua/line-justice/themes/init.lua`.
+Built-in themes live as individual spec files (`horizon.lua`, `dawn.lua`, `midnight.lua`) and are **loaded lazily** — only when first requested. The registry is exposed publicly as `require("line-justice").themes`.
+
+### Registry API
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `register(spec)` | `LineJusticeThemeSpec → boolean` | `true` on success | Validate and store a theme. Emits WARN and returns `false` if validation fails. |
+| `get(name)` | `string → LineJusticeOverrides\|nil` | colors table or nil | Load and return a theme's colors. Lazy-loads built-ins. Emits WARN if not found. |
+| `list()` | `() → string[]` | sorted name list | All registered + all built-in names (sorted alphabetically). |
+| `exists(name)` | `string → boolean` | bool | True if the name is registered or is a built-in. |
+
+### LineJusticeThemeSpec shape
 
 ```lua
-THEMES["MyTheme"] = {
-  CursorLine    = { fg = "#rrggbb", bold = true },
-  AbsoluteAbove = { fg = "#rrggbb" },
-  AbsoluteBelow = { fg = "#rrggbb" },
-  RelativeAbove = { fg = "#rrggbb" },
-  RelativeBelow = { fg = "#rrggbb" },
-  WrappedLine   = { fg = "#rrggbb", italic = true },
+---@type LineJusticeThemeSpec
+{
+  name        = "MyTheme",          -- unique identifier (case-sensitive)
+  description = "Short sentence.",  -- shown in error messages
+  author      = "Your Name",        -- optional
+  colors = {
+    CursorLine    = { fg = "#rrggbb", bold   = true },
+    AbsoluteAbove = { fg = "#rrggbb" },
+    AbsoluteBelow = { fg = "#rrggbb" },
+    RelativeAbove = { fg = "#rrggbb" },
+    RelativeBelow = { fg = "#rrggbb" },
+    WrappedLine   = { fg = "#rrggbb", italic = true },
+  },
 }
 ```
 
-- All six keys should be provided (missing keys fall through to auto-detect/FALLBACK).
-- Document the new theme in the README under "Built-in Themes".
-- Update `examples/lazy-spec.lua` to mention the new theme name.
+All six color keys are recommended. Missing keys fall through to auto-detect / FALLBACK (Horizon palette).
+
+### Adding a built-in theme (shipped with the plugin)
+
+1. Create `lua/line-justice/themes/<name>.lua` returning a `LineJusticeThemeSpec`.
+2. Add an entry to `BUILTIN_PATHS` in `lua/line-justice/themes/init.lua`:
+   ```lua
+   BUILTIN_PATHS["MyTheme"] = "line-justice.themes.myname"
+   ```
+3. Update `lua/line-justice/init.lua` LuaDoc for `LineJusticeLineNumbers.theme`.
+4. Document the new theme in README.md under "Built-in Themes".
+5. Add a commented example in `examples/lazy-spec.lua`.
+
+### Registering a custom theme at runtime
+
+Developers can register themes before or after `setup()`. Register before for the cleanest flow:
+
+```lua
+local lj = require("line-justice")
+
+lj.themes.register({
+  name        = "Forest",
+  description = "Deep greens and mossy tones.",
+  author      = "Jane Dev",
+  colors = {
+    CursorLine    = { fg = "#a8ff78", bold   = true },
+    AbsoluteAbove = { fg = "#4a7c59" },
+    AbsoluteBelow = { fg = "#2e5b3a" },
+    RelativeAbove = { fg = "#6dbf8a" },
+    RelativeBelow = { fg = "#4c9e6a" },
+    WrappedLine   = { fg = "#4a7c59", italic = true },
+  },
+})
+
+lj.setup({ line_numbers = { theme = "Forest" } })
+```
+
+See `examples/custom-theme.lua` for three fully-annotated example themes (Forest, Ember, Grayscale) and guidance on shipping themes as standalone files or plugins.
+
+### Validation rules
+
+The registry validates every spec before storing it:
+- `name` — non-empty string
+- `description` — non-empty string
+- `colors` — table; each present color slot must be a table
+- `colors.<slot>.fg` — if present, must be a `#rrggbb` hex string
+
+A failed validation emits `vim.notify(..., WARN)` and returns `false`. The registry is never left in a corrupt state.
+
+### Listing available themes
+
+```vim
+:lua print(vim.inspect(require("line-justice").themes.list()))
+```
+
+Returns all built-in + registered names alphabetically:
+```
+{ "Dawn", "Ember", "Forest", "Grayscale", "Horizon", "Midnight" }
+```
 
 ---
 
@@ -420,6 +546,11 @@ There is currently no automated test suite. All testing is manual. Before any no
 - [ ] **Auto-detect** (`theme = nil`) — colours match the active colorscheme; switch colorschemes and verify they update live.
 - [ ] **Overrides** — per-key overrides correctly override theme and auto-detect.
 - [ ] **Wrapped lines** — all six built-in indicators render correctly; `Custom` with a character; `Custom` with empty string warns.
+- [ ] **All three built-in themes** — `"Horizon"`, `"Dawn"`, `"Midnight"` render with correct colours.
+- [ ] **Custom theme registration** — `themes.register(spec)` stores the theme; `setup({ line_numbers = { theme = "..." } })` applies it.
+- [ ] **Invalid theme spec** — bad `fg` value, missing `name`, etc. emits WARN and returns `false`; plugin continues unaffected.
+- [ ] **`themes.list()`** — returns sorted list including all built-ins and registered themes.
+- [ ] **`themes.exists()`** — returns `true` for built-ins (even before first load) and registered themes; `false` for unknowns.
 - [ ] **Unknown theme name** — emits WARN, does not crash.
 - [ ] **Unknown indicator name** — emits WARN, falls back to blank.
 - [ ] **Large files** (1,000+ lines) — thousands separators appear in both the absolute and relative columns; gutter widens automatically at the 1k/10k/100k boundaries; column widths are identical in both the real-line and wrapped-line code paths; no performance degradation at 10,000+ lines.
@@ -439,7 +570,7 @@ There is currently no automated test suite. All testing is manual. Before any no
 | Colours wrong after colorscheme change | `ColorScheme` autocmd not firing | Check augroup `LineJusticeColorScheme` exists; ensure `setup()` was called |
 | Thousands separator misaligned | `col_w` formula bug | Both real-line and wrap-line paths use the same formula — keep them in sync |
 | Wrapped indicator not centred | `centre()` helper receiving wrong width | Verify `gutter_w = col_w + 1 + col_w` in both branches |
-| `Unknown theme` warning | Typo in `theme` string | Check `THEMES` table keys (case-sensitive) |
+| `Unknown theme` warning | Typo in `theme` string | Check `themes.list()` for valid names (case-sensitive); ensure custom themes are registered before `setup()` |
 | `Unknown indicator` warning | Typo in `indicator` string | Check `WRAPPED_INDICATORS` keys (case-sensitive) |
 | Duplicate `ColorScheme` autocmds | `setup()` called multiple times | Already handled — augroup created with `{ clear = true }` |
 
