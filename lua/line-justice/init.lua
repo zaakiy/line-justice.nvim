@@ -1,39 +1,55 @@
 -- line-justice.nvim — dual absolute/relative line numbers via statuscol.nvim
 --
--- Highlight resolution priority (highest → lowest):
---   1. User-provided colours in setup() opts
---   2. Named preset  (opts.line_numbers.preset)
---   3. Auto-detected from the active colorscheme's built-in highlight groups
---   4. Hardcoded fallback defaults
+-- Displays both the absolute line number (true position in the file) and the
+-- relative distance from the cursor on every line simultaneously. Makes pair
+-- programming, code reviews, and remote collaboration effortless.
+--
+-- ┌─────────────────────────────────────────────────────────────────────┐
+-- │  Configuration quick-reference                                      │
+-- │                                                                     │
+-- │  line_numbers.theme     string   Named palette ("Horizon" default)  │
+-- │                         nil      Auto-detect from colorscheme       │
+-- │  line_numbers.overrides table    Per-key colour overrides           │
+-- │                                                                     │
+-- │  Colour resolution priority (highest → lowest):                    │
+-- │    1. line_numbers.overrides  (your per-key tweaks)                │
+-- │    2. line_numbers.theme      (named built-in palette)             │
+-- │    3. colorscheme auto-detect (NeoVim's own highlight groups)      │
+-- │    4. Hardcoded fallback      (always something sensible)          │
+-- └─────────────────────────────────────────────────────────────────────┘
 
 -- ---------------------------------------------------------------------------
 -- LuaDoc types
 -- ---------------------------------------------------------------------------
 
----Colour overrides for each part of the line-number gutter.
----Every key is optional — omit it to fall through to the preset or
----auto-detect.  Values are vim.api.nvim_set_hl-compatible tables, e.g.
----  { fg = "#bb9af7", bold = true }
+---Per-key colour overrides for the line-number gutter.
 ---
----@class LineJusticeTheme
----@field CursorLine?     table  The line the cursor is on
----@field AbsoluteAbove?  table  Absolute numbers on lines above the cursor
----@field AbsoluteBelow?  table  Absolute numbers on lines below the cursor
+--- Every key is optional. Any key you omit falls through to the named theme
+--- or auto-detect. Values are vim.api.nvim_set_hl-compatible tables:
+---   { fg = "#rrggbb" }
+---   { fg = "#rrggbb", bold = true }
+---   { fg = "#rrggbb", italic = true }
+---
+---@class LineJusticeOverrides
+---@field CursorLine?     table  The line the cursor is currently on
+---@field AbsoluteAbove?  table  Absolute line numbers on lines above the cursor
+---@field AbsoluteBelow?  table  Absolute line numbers on lines below the cursor
 ---@field RelativeAbove?  table  Relative distance for lines above the cursor
 ---@field RelativeBelow?  table  Relative distance for lines below the cursor
----@field WrappedLine?    table  The ↳ indicator shown on soft-wrapped continuations
+---@field WrappedLine?    table  The ↳ indicator on soft-wrapped continuation lines
 
 ---Settings for the line-number columns.
 ---
 ---@class LineJusticeLineNumbers
----@field preset?  string            Named colour preset. "Horizon" uses the
----                                  built-in palette. nil = auto-detect from
----                                  the active colorscheme (default).
----@field theme?   LineJusticeTheme  Per-key colour overrides merged on top of
----                                  the preset / auto-detect result.
+---@field theme?     string                 Name of a built-in colour palette.
+---                                         "Horizon" = cool blues above, greens below.
+---                                         nil       = auto-detect from your colorscheme.
+---@field overrides? LineJusticeOverrides   Per-key colour overrides applied on top of
+---                                         the named theme or auto-detect result.
+---                                         Any key left out falls through unchanged.
 
----Top-level configuration passed to setup().
----All keys are optional; omitted keys use the defaults.
+---Top-level configuration table passed to setup().
+---All keys are optional — omitting them uses the defaults shown below.
 ---
 ---@class LineJusticeConfig
 ---@field line_numbers? LineJusticeLineNumbers
@@ -45,18 +61,18 @@
 ---@type LineJusticeConfig
 local defaults = {
   line_numbers = {
-    preset = "Horizon", -- built-in colour palette; set to nil to auto-detect
-                        -- colours from your active colorscheme instead
-    theme = {},         -- per-key overrides merged on top of the preset
+    theme     = "Horizon", -- use the built-in Horizon palette by default
+                           -- set to nil to auto-detect from your colorscheme
+    overrides = {},        -- no overrides; all colours come from the theme
   },
 }
 
--- Internal options never exposed to the user
+-- Internal settings — deliberately not exposed to users.
+-- These are implementation details of the statuscol.nvim integration.
 local INTERNAL = {
-  -- Buffer types where line-justice is always disabled.
-  -- "nofile" covers virtually all plugin-managed buffers (file trees,
-  -- dashboards, pickers, scratch buffers, etc.)
-  bt_ignore = { "nofile" },
+  -- "nofile" buftype covers virtually all plugin-managed buffers:
+  -- file trees, dashboards, pickers, scratch buffers, floating windows, etc.
+  bt_ignore   = { "nofile" },
   -- Right-align the cursor-line number in the relative column
   relculright = true,
 }
@@ -67,52 +83,63 @@ local config = {}
 local M = {}
 
 -- ---------------------------------------------------------------------------
--- Built-in colour presets
+-- Built-in colour themes (palettes)
 -- ---------------------------------------------------------------------------
-
--- "Horizon"
---   Inspired by a crisp horizon: cool blue-purple sky above the cursor,
---   fresh green earth below.  These are the author's original hand-crafted
---   colours, tuned for TokyoNight-family colorschemes but usable on any
---   dark theme.
 --
---   CursorLine    #bb9af7  soft violet, bold
---   AbsoluteAbove #565f89  muted blue-grey
---   AbsoluteBelow #41664f  deep forest green
---   RelativeAbove #7b9ac7  brighter steel blue
---   RelativeBelow #6aa781  brighter sage green
---   WrappedLine   #565f89  same blue-grey as AbsoluteAbove, italic
+-- Each entry in THEMES is a complete LineJusticeOverrides-compatible table.
+-- Add more themes here in future; they become available immediately via
+-- line_numbers.theme = "<name>".
 --
----@type table<string, LineJusticeTheme>
-local PRESETS = {
+-- ┌──────────────┬──────────┬────────────────────────────────────────────┐
+-- │ Key          │ Hex      │ Description                                │
+-- ├──────────────┼──────────┼────────────────────────────────────────────┤
+-- │ CursorLine   │ #bb9af7  │ Soft violet, bold — stands out on cursor   │
+-- │ AbsoluteAbove│ #565f89  │ Muted blue-grey — absolute nums above      │
+-- │ AbsoluteBelow│ #41664f  │ Deep forest green — absolute nums below    │
+-- │ RelativeAbove│ #7b9ac7  │ Brighter steel blue — relative nums above  │
+-- │ RelativeBelow│ #6aa781  │ Brighter sage green — relative nums below  │
+-- │ WrappedLine  │ #565f89  │ Same blue-grey as AbsoluteAbove, italic    │
+-- └──────────────┴──────────┴────────────────────────────────────────────┘
+--
+---@type table<string, LineJusticeOverrides>
+local THEMES = {
+  -- "Horizon"
+  -- Inspired by a crisp horizon line: cool blue-purple sky above the cursor,
+  -- fresh green earth below. Original hand-crafted colours by the author,
+  -- tuned for TokyoNight-family colorschemes but great on any dark theme.
   Horizon = {
-    CursorLine    = { fg = "#bb9af7", bold   = true  },
+    CursorLine    = { fg = "#bb9af7", bold   = true },
     AbsoluteAbove = { fg = "#565f89" },
     AbsoluteBelow = { fg = "#41664f" },
     RelativeAbove = { fg = "#7b9ac7" },
     RelativeBelow = { fg = "#6aa781" },
-    WrappedLine   = { fg = "#565f89", italic = true  },
+    WrappedLine   = { fg = "#565f89", italic = true },
   },
 }
 
 -- ---------------------------------------------------------------------------
--- Fallback defaults
+-- Hardcoded fallback
 -- ---------------------------------------------------------------------------
-
--- Used only when auto-detect yields nothing AND no preset is active.
--- Mirrors the Horizon palette so there is always something sensible.
----@type LineJusticeTheme
+--
+-- Only used when:
+--   • line_numbers.theme is nil (auto-detect mode), AND
+--   • the active colorscheme does not define the probed highlight group
+--
+-- Mirrors the Horizon palette so there is always a sensible colour even on
+-- unknown or minimal colorschemes.
+--
+---@type LineJusticeOverrides
 local FALLBACK = {
-  CursorLine    = { fg = "#bb9af7", bold   = true  },
+  CursorLine    = { fg = "#bb9af7", bold   = true },
   AbsoluteAbove = { fg = "#565f89" },
   AbsoluteBelow = { fg = "#41664f" },
   RelativeAbove = { fg = "#7b9ac7" },
   RelativeBelow = { fg = "#6aa781" },
-  WrappedLine   = { fg = "#565f89", italic = true  },
+  WrappedLine   = { fg = "#565f89", italic = true },
 }
 
 -- ---------------------------------------------------------------------------
--- Helpers
+-- Internal helpers
 -- ---------------------------------------------------------------------------
 
 ---Format a line number with thousands separators.
@@ -123,8 +150,8 @@ local function format_line_number(num)
   return str:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
 end
 
----Convert a numeric colour value (from nvim_get_hl) to a hex string.
----@param num number  0–16777215
+---Convert a numeric colour value (as returned by nvim_get_hl) to hex.
+---@param num number  Integer 0–16777215
 ---@return string     e.g. "#7aa2f7"
 local function numeric_to_hex(num)
   return string.format("#%06x", num)
@@ -134,21 +161,27 @@ end
 -- Highlight resolution
 -- ---------------------------------------------------------------------------
 
----Resolve and register the LineJustice* NeoVim highlight groups.
+---Resolve and register all LineJustice* NeoVim highlight groups.
 ---
---- Priority (highest → lowest):
----   1. user_theme  — keys from setup() opts.line_numbers.theme
----   2. preset      — keys from the named preset (e.g. "Horizon")
----   3. colorscheme — fg derived from NeoVim's own highlight groups
----   4. FALLBACK    — hardcoded last resort
+--- Called once at setup() and again whenever :colorscheme changes so that
+--- colours always stay in sync with the active theme.
 ---
----@param user_theme  LineJusticeTheme  Per-key user overrides (may be empty)
----@param preset_theme LineJusticeTheme Preset colours (may be empty)
-local function resolve_highlights(user_theme, preset_theme)
-  user_theme   = user_theme   or {}
-  preset_theme = preset_theme or {}
+--- Resolution order for each colour slot (highest priority first):
+---
+---   1. overrides  — the user's per-key table from line_numbers.overrides
+---   2. theme      — the named built-in palette from line_numbers.theme
+---   3. colorscheme — fg derived from NeoVim's own highlight groups (probed
+---                    in order; first non-nil result wins)
+---   4. FALLBACK   — hardcoded last resort; always produces a colour
+---
+---@param overrides  LineJusticeOverrides  User per-key overrides (may be empty)
+---@param theme_tbl  LineJusticeOverrides  Resolved theme table (may be empty)
+local function resolve_highlights(overrides, theme_tbl)
+  overrides  = overrides  or {}
+  theme_tbl  = theme_tbl  or {}
 
-  ---Try to read the fg of a NeoVim highlight group; return hex or nil.
+  ---Attempt to read the `fg` of a NeoVim highlight group.
+  ---Returns the hex string, or nil if the group has no fg.
   ---@param name string
   ---@return string|nil
   local function try_fg(name)
@@ -157,34 +190,37 @@ local function resolve_highlights(user_theme, preset_theme)
     return nil
   end
 
-  ---Build the final hl table for one slot.
-  --- 1. colorscheme auto-detect (first probe that returns a colour wins)
-  --- 2. layer preset on top
-  --- 3. layer user override on top
-  --- 4. if still no fg, use FALLBACK
-  ---@param key    string    Theme key, e.g. "CursorLine"
-  ---@param probes string[]  NeoVim hl groups to probe for auto-detect
-  ---@return table
+  ---Build the final highlight table for one colour slot.
+  ---
+  --- Steps:
+  ---   1. Try each probe group in order; use the first fg found (colorscheme)
+  ---   2. Layer the theme value on top (theme wins over colorscheme)
+  ---   3. Layer the user override on top (override wins over everything)
+  ---   4. If still no fg at all, use the hardcoded FALLBACK
+  ---
+  ---@param key    string    Slot name, e.g. "CursorLine"
+  ---@param probes string[]  NeoVim highlight groups to probe for auto-detect
+  ---@return table           vim.api.nvim_set_hl-compatible table
   local function resolve(key, probes)
     local base = {}
 
-    -- Step 1: colorscheme
+    -- Step 1: colorscheme auto-detect
     for _, name in ipairs(probes) do
       local fg = try_fg(name)
       if fg then base.fg = fg; break end
     end
 
-    -- Step 2: preset
-    if preset_theme[key] then
-      base = vim.tbl_deep_extend("force", base, preset_theme[key])
+    -- Step 2: named theme (overrides colorscheme-derived fg)
+    if theme_tbl[key] then
+      base = vim.tbl_deep_extend("force", base, theme_tbl[key])
     end
 
-    -- Step 3: user
-    if user_theme[key] then
-      base = vim.tbl_deep_extend("force", base, user_theme[key])
+    -- Step 3: user overrides (highest priority — overrides everything above)
+    if overrides[key] then
+      base = vim.tbl_deep_extend("force", base, overrides[key])
     end
 
-    -- Step 4: fallback
+    -- Step 4: fallback — ensure there is always a fg colour
     if not base.fg then
       base = vim.tbl_deep_extend("force", base, FALLBACK[key] or {})
     end
@@ -192,6 +228,8 @@ local function resolve_highlights(user_theme, preset_theme)
     return base
   end
 
+  -- Resolve every slot. The probe lists define which NeoVim highlight groups
+  -- are queried when auto-detecting from the colorscheme.
   local r = {
     CursorLine    = resolve("CursorLine",    { "CursorLineNr" }),
     AbsoluteAbove = resolve("AbsoluteAbove", { "LineNr" }),
@@ -201,6 +239,7 @@ local function resolve_highlights(user_theme, preset_theme)
     WrappedLine   = resolve("WrappedLine",   { "NonText" }),
   }
 
+  -- Register the highlight groups used in the statuscolumn string
   vim.api.nvim_set_hl(0, "LineJusticeCursorLine",    r.CursorLine)
   vim.api.nvim_set_hl(0, "LineJusticeAbsoluteAbove", r.AbsoluteAbove)
   vim.api.nvim_set_hl(0, "LineJusticeAbsoluteBelow", r.AbsoluteBelow)
@@ -210,7 +249,7 @@ local function resolve_highlights(user_theme, preset_theme)
 end
 
 -- ---------------------------------------------------------------------------
--- statuscol wiring (internal — users never touch this directly)
+-- statuscol wiring (internal — users configure line-justice, not statuscol)
 -- ---------------------------------------------------------------------------
 
 ---@private
@@ -227,30 +266,32 @@ function M._setup_statuscol()
 
   local cfg = config.line_numbers
 
-  -- Resolve preset
-  local preset_theme = {}
-  if cfg.preset then
-    preset_theme = PRESETS[cfg.preset]
-    if not preset_theme then
+  -- Resolve the named theme into a concrete colour table
+  local theme_tbl = {}
+  if cfg.theme then
+    theme_tbl = THEMES[cfg.theme]
+    if not theme_tbl then
       vim.notify(
-        "[line-justice] Unknown preset '" .. cfg.preset .. "'. "
-          .. "Available presets: " .. table.concat(vim.tbl_keys(PRESETS), ", "),
+        "[line-justice] Unknown theme '" .. cfg.theme .. "'. "
+          .. "Available themes: " .. table.concat(vim.tbl_keys(THEMES), ", "),
         vim.log.levels.WARN
       )
-      preset_theme = {}
+      theme_tbl = {}
     end
   end
 
-  -- Initial highlight setup
-  resolve_highlights(cfg.theme, preset_theme)
+  -- Perform initial highlight resolution
+  resolve_highlights(cfg.overrides, theme_tbl)
 
-  -- Re-resolve whenever the colorscheme changes
+  -- Re-resolve whenever the user switches colorscheme so colours stay in sync.
+  -- Both the theme and overrides are always re-applied on top of the new scheme.
   local grp = vim.api.nvim_create_augroup("LineJusticeColorScheme", { clear = true })
   vim.api.nvim_create_autocmd("ColorScheme", {
     group = grp,
-    callback = function() resolve_highlights(cfg.theme, preset_theme) end,
+    callback = function() resolve_highlights(cfg.overrides, theme_tbl) end,
   })
 
+  -- Wire up the statuscol.nvim segment
   statuscol.setup({
     relculright = INTERNAL.relculright,
     bt_ignore   = INTERNAL.bt_ignore,
@@ -281,25 +322,26 @@ function M._setup_statuscol()
 
               -- ── Format both numbers ───────────────────────────────────────
               local abs_num = format_line_number(args.lnum)
-              -- Cursor line: blank relative column (never show "0")
+              -- Cursor line: leave the relative column blank (never show "0")
               local rel_num = args.relnum == 0 and "" or format_line_number(args.relnum)
 
-              -- ── Fixed-width columns (accounts for comma separators) ───────
+              -- ── Fixed-width columns (accounts for thousands-separator commas)
               local total_lines = vim.fn.line("$")
               local num_digits  = #tostring(total_lines)
               local num_commas  = math.floor((num_digits - 1) / 3)
               local col_w       = num_digits + num_commas
 
-              -- Right-align absolute number
+              -- Right-align the absolute number
               abs_num = string.rep(" ", math.max(0, col_w - #abs_num)) .. abs_num
 
-              -- Pad relative number so total gutter width stays fixed
+              -- Pad the relative number so the total gutter width stays fixed
               local target_w  = col_w + 1 + col_w
               local current_w = #abs_num + 1 + #rel_num
               local rel_pad   = string.rep(" ", math.max(0, target_w - current_w))
 
               return abs_hl .. abs_num .. " " .. rel_hl .. rel_num .. rel_pad
             else
+              -- Soft-wrapped continuation lines
               return "%#LineJusticeWrappedLine#↳ "
             end
           end,
@@ -316,34 +358,72 @@ end
 
 ---Initialise line-justice.nvim.
 ---
---- Minimal — use all defaults (colours auto-detected from your colorscheme):
+--- ── The simplest setup ───────────────────────────────────────────────────
+---
+--- Uses the Horizon theme (the default):
 ---
 ---   require("line-justice").setup()
 ---
---- Use the built-in Horizon colour preset:
+--- ── Using a named theme ──────────────────────────────────────────────────
+---
+--- "Horizon" is the only built-in theme. Cool blue-purple sky above the
+--- cursor, fresh green earth below:
 ---
 ---   require("line-justice").setup({
 ---     line_numbers = {
----       preset = "Horizon",
+---       theme = "Horizon",
 ---     },
 ---   })
 ---
---- Horizon preset with one colour overridden:
+--- ── Auto-detect from your colorscheme ────────────────────────────────────
+---
+--- Set theme = nil to derive colours from NeoVim's own highlight groups.
+--- Colours update automatically whenever you run :colorscheme:
 ---
 ---   require("line-justice").setup({
 ---     line_numbers = {
----       preset = "Horizon",
----       theme = {
----         CursorLine = { fg = "#ff9e64", bold = true },
+---       theme = nil,
+---     },
+---   })
+---
+--- ── Overriding individual colours on top of a theme ──────────────────────
+---
+--- Use overrides to tweak one or two colours while keeping the rest of the
+--- theme intact. Any key you omit stays exactly as the theme defines it:
+---
+---   require("line-justice").setup({
+---     line_numbers = {
+---       theme = "Horizon",
+---       overrides = {
+---         CursorLine = { fg = "#ff9e64", bold = true }, -- swap cursor colour
 ---       },
 ---     },
 ---   })
 ---
---- Fully manual colours (no preset, no auto-detect):
+--- ── Overriding colours on top of auto-detect ─────────────────────────────
+---
+--- overrides works the same way when theme = nil. The auto-detected colour
+--- is used as the base, then your override is layered on top:
 ---
 ---   require("line-justice").setup({
 ---     line_numbers = {
----       theme = {
+---       theme = nil,
+---       overrides = {
+---         AbsoluteAbove = { fg = "#7aa2f7" },
+---         RelativeBelow = { fg = "#9ece6a" },
+---       },
+---     },
+---   })
+---
+--- ── Fully manual colours ─────────────────────────────────────────────────
+---
+--- Set theme = nil and provide all six keys in overrides to take complete
+--- control. Auto-detect is skipped for any key you supply:
+---
+---   require("line-justice").setup({
+---     line_numbers = {
+---       theme = nil,
+---       overrides = {
 ---         CursorLine    = { fg = "#bb9af7", bold = true },
 ---         AbsoluteAbove = { fg = "#565f89" },
 ---         AbsoluteBelow = { fg = "#41664f" },

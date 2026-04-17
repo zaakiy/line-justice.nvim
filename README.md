@@ -48,7 +48,7 @@ When you need to jump, you use the relative number. When you reference, you use 
   dependencies = { "luukvbaal/statuscol.nvim" },
   event = "VeryLazy",
   opts = {
-    line_numbers = { preset = "Horizon" },
+    line_numbers = { theme = "Horizon" },
   },
 }
 ```
@@ -61,7 +61,7 @@ use {
   requires = { "luukvbaal/statuscol.nvim" },
   config = function()
     require("line-justice").setup({
-      line_numbers = { preset = "Horizon" },
+      line_numbers = { theme = "Horizon" },
     })
   end,
 }
@@ -71,6 +71,8 @@ use {
 
 Clone both `luukvbaal/statuscol.nvim` and `zaakiy/line-justice.nvim`, add them to your `runtimepath`, then call `require("line-justice").setup({})` in your `init.lua`.
 
+---
+
 ## Configuration
 
 Call `require("line-justice").setup(opts)` with any options you want to override. All keys are optional — omitting them uses the defaults shown below.
@@ -78,14 +80,17 @@ Call `require("line-justice").setup(opts)` with any options you want to override
 ```lua
 require("line-justice").setup({
   line_numbers = {
-    -- Named colour preset. "Horizon" uses the built-in palette.
-    -- nil = auto-detect colours from your active colorscheme (default).
-    preset = "Horizon", -- built-in colour palette (default)
-                        -- set to nil to auto-detect from your colorscheme
 
-    -- Per-colour overrides. Any key left out falls through to the preset
-    -- or auto-detect. All keys are optional.
-    theme = {
+    -- theme (string | nil)
+    --   Name of a built-in colour palette, or nil to auto-detect from your
+    --   active colorscheme. Default: "Horizon".
+    theme = "Horizon",
+
+    -- overrides (table | nil)
+    --   Per-key colour tweaks applied on top of the theme or auto-detect.
+    --   Any key you omit is left exactly as the theme/auto-detect defines it.
+    --   All keys are optional; provide only the ones you want to change.
+    overrides = {
       -- CursorLine    = { fg = "#bb9af7", bold = true },
       -- AbsoluteAbove = { fg = "#565f89" },
       -- AbsoluteBelow = { fg = "#41664f" },
@@ -93,30 +98,40 @@ require("line-justice").setup({
       -- RelativeBelow = { fg = "#6aa781" },
       -- WrappedLine   = { fg = "#565f89", italic = true },
     },
+
   },
 })
 ```
 
-### Theme keys
+### Colour keys
 
 | Key | What it colours |
 |---|---|
-| `CursorLine` | The line the cursor is on |
-| `AbsoluteAbove` | Absolute numbers on lines above the cursor |
-| `AbsoluteBelow` | Absolute numbers on lines below the cursor |
+| `CursorLine` | The line the cursor is currently on |
+| `AbsoluteAbove` | Absolute line numbers on lines above the cursor |
+| `AbsoluteBelow` | Absolute line numbers on lines below the cursor |
 | `RelativeAbove` | Relative distance for lines above the cursor |
 | `RelativeBelow` | Relative distance for lines below the cursor |
 | `WrappedLine` | The ↳ indicator on soft-wrapped continuation lines |
 
+### Colour resolution priority
+
+When determining a colour, line-justice works through this chain and stops at the first result:
+
+| Priority | Source | Set via |
+|---|---|---|
+| 1 (highest) | `overrides` | `line_numbers.overrides = { Key = { fg = "..." } }` |
+| 2 | Named theme | `line_numbers.theme = "Horizon"` |
+| 3 | Colorscheme auto-detect | `line_numbers.theme = nil` |
+| 4 (lowest) | Hardcoded fallback | always active; mirrors the Horizon palette |
+
 ---
 
-## Colour Presets
+## Built-in Themes
 
-By default line-justice auto-detects colours from your active colorscheme. You can instead pin it to a named preset via `line_numbers.preset`.
+### `"Horizon"` _(default)_
 
-### `Horizon`
-
-A cool blue-purple sky above the cursor, fresh green earth below. These are the author's original hand-crafted colours, designed for TokyoNight-family colorschemes but great on any dark theme.
+A cool blue-purple sky above the cursor, fresh green earth below. The author's original hand-crafted colours, designed for TokyoNight-family colorschemes but great on any dark theme.
 
 | Key | Hex | Description |
 |---|---|---|
@@ -127,28 +142,11 @@ A cool blue-purple sky above the cursor, fresh green earth below. These are the 
 | `RelativeBelow` | `#6aa781` | Brighter sage green |
 | `WrappedLine` | `#565f89` | Muted blue-grey, italic |
 
-```lua
--- Use the Horizon preset:
-require("line-justice").setup({
-  line_numbers = { preset = "Horizon" },
-})
+### Auto-detect _(theme = nil)_
 
--- Horizon preset with one colour overridden:
-require("line-justice").setup({
-  line_numbers = {
-    preset = "Horizon",
-    theme = {
-      CursorLine = { fg = "#ff9e64", bold = true }, -- swap just the cursor colour
-    },
-  },
-})
-```
+When `theme` is `nil`, line-justice reads your colorscheme's built-in highlight groups and derives colours automatically. Colours update on every `:colorscheme` change.
 
-### Auto-detect (default)
-
-When `preset` is `nil`, line-justice reads your colorscheme's built-in highlight groups and derives colours automatically. It re-resolves on every `:colorscheme` change.
-
-| Theme key | Probed groups (first match wins) |
+| Key | Probed NeoVim highlight groups (first match wins) |
 |---|---|
 | `CursorLine` | `CursorLineNr` |
 | `AbsoluteAbove` | `LineNr` |
@@ -156,6 +154,94 @@ When `preset` is `nil`, line-justice reads your colorscheme's built-in highlight
 | `RelativeAbove` | `LineNr` |
 | `RelativeBelow` | `LineNrBelow`, `String` |
 | `WrappedLine` | `NonText` |
+
+---
+
+## Examples
+
+### Just use the defaults
+No configuration required — Horizon is active out of the box:
+```lua
+require("line-justice").setup()
+```
+
+### Use the Horizon theme explicitly
+```lua
+require("line-justice").setup({
+  line_numbers = {
+    theme = "Horizon",
+  },
+})
+```
+
+### Auto-detect colours from your colorscheme
+```lua
+require("line-justice").setup({
+  line_numbers = {
+    theme = nil,
+  },
+})
+```
+
+### Override one colour on top of Horizon
+Keep all of Horizon's colours but swap the cursor line to a warm orange:
+```lua
+require("line-justice").setup({
+  line_numbers = {
+    theme = "Horizon",
+    overrides = {
+      CursorLine = { fg = "#ff9e64", bold = true },
+    },
+  },
+})
+```
+
+### Override several colours on top of Horizon
+```lua
+require("line-justice").setup({
+  line_numbers = {
+    theme = "Horizon",
+    overrides = {
+      CursorLine    = { fg = "#ff9e64", bold = true },  -- warm orange cursor
+      AbsoluteBelow = { fg = "#73daca" },               -- teal below
+      RelativeBelow = { fg = "#73daca" },               -- teal relative below
+    },
+  },
+})
+```
+
+### Override colours on top of auto-detect
+```lua
+require("line-justice").setup({
+  line_numbers = {
+    theme = nil,   -- start from your colorscheme
+    overrides = {
+      AbsoluteAbove = { fg = "#7aa2f7" },  -- pin absolute-above to a specific blue
+      RelativeBelow = { fg = "#9ece6a" },  -- pin relative-below to a specific green
+    },
+  },
+})
+```
+
+### Fully manual — take complete control
+Set `theme = nil` and provide all six keys in `overrides`. Neither the theme nor auto-detect is used for the keys you supply:
+```lua
+require("line-justice").setup({
+  line_numbers = {
+    theme = nil,
+    overrides = {
+      CursorLine    = { fg = "#bb9af7", bold = true },
+      AbsoluteAbove = { fg = "#565f89" },
+      AbsoluteBelow = { fg = "#41664f" },
+      RelativeAbove = { fg = "#7b9ac7" },
+      RelativeBelow = { fg = "#6aa781" },
+      WrappedLine   = { fg = "#565f89", italic = true },
+    },
+  },
+})
+```
+
+---
 
 ## How It Works
 
