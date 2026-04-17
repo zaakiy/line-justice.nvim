@@ -25,7 +25,7 @@ Is it near the top? The middle? Nobody knows.
 45 &nbsp; 3 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return res.status(404).json({ error: 'Not found' })\
 46 &nbsp; 2 &nbsp;&nbsp;&nbsp; }\
 47 &nbsp; 1 &nbsp;&nbsp;&nbsp; ...\
-**48** &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; _← cursor is here_\
+**48** &nbsp; &nbsp;&nbsp;&nbsp;&nbsp; _← cursor is here_\
 49 &nbsp; 1 &nbsp;&nbsp;&nbsp; return res.json(user)\
 50 &nbsp; 2 &nbsp; }
 
