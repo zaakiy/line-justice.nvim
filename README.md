@@ -33,6 +33,10 @@ Or worse: a code review where someone references _"the line with the bug"_ in a 
 Now when your colleague says _"line 42"_, you both instantly see the same thing.
 When you need to jump, you use the relative number. When you reference, you use the absolute. No confusion.
 
+## Demo
+
+
+
 ## Requirements
 
 - **NeoVim 0.10+**
