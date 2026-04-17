@@ -47,7 +47,9 @@ When you need to jump, you use the relative number. When you reference, you use 
   "zaakiy/line-justice.nvim",
   dependencies = { "luukvbaal/statuscol.nvim" },
   event = "VeryLazy",
-  opts = {}, -- uses defaults; see Configuration section to customise
+  opts = {
+    line_numbers = { preset = "Horizon" },
+  },
 }
 ```
 
@@ -58,7 +60,9 @@ use {
   "zaakiy/line-justice.nvim",
   requires = { "luukvbaal/statuscol.nvim" },
   config = function()
-    require("line-justice").setup({})
+    require("line-justice").setup({
+      line_numbers = { preset = "Horizon" },
+    })
   end,
 }
 ```
@@ -76,7 +80,8 @@ require("line-justice").setup({
   line_numbers = {
     -- Named colour preset. "Horizon" uses the built-in palette.
     -- nil = auto-detect colours from your active colorscheme (default).
-    preset = nil,
+    preset = "Horizon", -- built-in colour palette (default)
+                        -- set to nil to auto-detect from your colorscheme
 
     -- Per-colour overrides. Any key left out falls through to the preset
     -- or auto-detect. All keys are optional.

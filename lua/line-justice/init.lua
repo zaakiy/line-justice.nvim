@@ -45,9 +45,9 @@
 ---@type LineJusticeConfig
 local defaults = {
   line_numbers = {
-    -- preset = nil,  -- set to "Horizon" to pin the built-in colour palette
-    theme = {},       -- no overrides by default; everything comes from the
-                      -- preset or is auto-detected from your colorscheme
+    preset = "Horizon", -- built-in colour palette; set to nil to auto-detect
+                        -- colours from your active colorscheme instead
+    theme = {},         -- per-key overrides merged on top of the preset
   },
 }
 

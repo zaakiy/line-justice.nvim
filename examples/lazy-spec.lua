@@ -6,15 +6,15 @@ return {
   dependencies = { "luukvbaal/statuscol.nvim" },
   event = "VeryLazy",
 
-  -- ── Option A: auto-detect colours from your colorscheme (default) ────────
-  opts = {},
+  -- ── Option A: auto-detect colours from your colorscheme ──────────────────
+  -- opts = {},
 
-  -- ── Option B: use the built-in "Horizon" preset ───────────────────────────
-  -- opts = {
-  --   line_numbers = {
-  --     preset = "Horizon",
-  --   },
-  -- },
+  -- ── Option B: use the built-in "Horizon" preset (default) ────────────────
+  opts = {
+    line_numbers = {
+      preset = "Horizon",
+    },
+  },
 
   -- ── Option C: "Horizon" preset with individual colour overrides ───────────
   -- opts = {
