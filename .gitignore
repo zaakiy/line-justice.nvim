@@ -48,5 +48,8 @@ doc/
 # If you have any personal configuration files, you should ignore them too
 config.personal.lua
 
+# Development system prompts
+SYSTEM_PROMPT.md
+
 
 
