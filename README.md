@@ -27,7 +27,7 @@ Is it near the top? The middle? Nobody knows.
 47 &nbsp; 1 &nbsp;&nbsp;&nbsp; ...\
 **48** &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; _← cursor is here_\
 49 &nbsp; 1 &nbsp;&nbsp;&nbsp; return res.json(user)\
-50 &nbsp; 2 }
+50 &nbsp; 2 &nbsp; }
 
 - The **left column** is the absolute line number — the true position in the file.
 - The **right column** is the relative distance from your cursor.
