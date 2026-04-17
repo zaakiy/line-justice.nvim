@@ -12,7 +12,7 @@
 -- │  line_numbers.overrides   table    Per-key colour overrides              │
 -- │                                                                          │
 -- │  wrapped_lines.indicator  string   Named indicator preset (default:      │
--- │                                    "None" — blank gutter on wrap)        │
+-- │                                    "Bar" — a line that extends down to all overlapping lines)        │
 -- │  wrapped_lines.custom     string   Character used when indicator="Custom"│
 -- │                                                                          │
 -- │  Colour resolution priority (highest → lowest):                         │
@@ -99,7 +99,7 @@ local defaults = {
     overrides = {},        -- no overrides; all colours come from the theme
   },
   wrapped_lines = {
-    indicator = "None",    -- blank gutter on wrapped lines (no character shown)
+    indicator = "Bar",    -- blank gutter on wrapped lines (no character shown)
     custom    = "",        -- only used when indicator = "Custom"
   },
 }
@@ -209,7 +209,7 @@ end
 ---@param  wl_cfg LineJusticeWrappedLines
 ---@return string  The indicator character (may be empty)
 local function resolve_indicator(wl_cfg)
-  local name = wl_cfg.indicator or "None"
+  local name = wl_cfg.indicator or "Bar"
 
   if name == "Custom" then
     -- Use whatever the user put in wrapped_lines.custom
@@ -231,7 +231,7 @@ local function resolve_indicator(wl_cfg)
         .. name .. "'. "
         .. "Available: "
         .. table.concat(vim.tbl_keys(WRAPPED_INDICATORS), ", ")
-        .. ", Custom. Falling back to \"None\".",
+        .. ", Custom. Falling back to \"Bar\".",
       vim.log.levels.WARN
     )
     return ""

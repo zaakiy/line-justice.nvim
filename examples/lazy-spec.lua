@@ -46,7 +46,7 @@ return {
   -- ── Option A: defaults — Horizon theme, no wrapped indicator ──────────────
   opts = {
     line_numbers  = { theme = "Horizon" },
-    wrapped_lines = { indicator = "None" },
+    wrapped_lines = { indicator = "Bar" },
   },
 
   config = function(_, opts)
