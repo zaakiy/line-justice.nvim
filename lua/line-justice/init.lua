@@ -51,6 +51,8 @@ local defaults = {
       "avante",
       "AvanteTodos",
       "neominimap",
+      "grug-far",
+      "snacks_dashboard",
     },
     highlights = {},
   },
