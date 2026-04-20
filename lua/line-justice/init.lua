@@ -15,6 +15,10 @@
 -- │                                    "Bar" — a line that extends down to all overlapping lines)        │
 -- │  wrapped_lines.custom     string   Character used when indicator="Custom"│
 -- │                                                                          │
+-- │  statuscol.segments_before  table[]  statuscol segments before LJ       │
+-- │  statuscol.segments_after   table[]  statuscol segments after  LJ       │
+-- │  statuscol.options          table    extra top-level statuscol options   │
+-- │                                                                          │
 -- │  Colour resolution priority (highest → lowest):                         │
 -- │    1. line_numbers.overrides  (your per-key tweaks)                     │
 -- │    2. line_numbers.theme      (named built-in palette)                  │
@@ -80,12 +84,41 @@
 ---                          indicator = "Custom". Ignored for all other presets.
 ---                          Examples: "»", "⤷", "▸", "→", "╰"
 
+---Passthrough options forwarded directly to statuscol.nvim's setup().
+---
+--- Use this to integrate other plugins (e.g. gitsigns) that also need to
+--- place content in the statuscolumn alongside line-justice's own segments.
+---
+--- line-justice always contributes exactly one segment (the dual line-number
+--- renderer). You can sandwich additional statuscol segments around it:
+---
+---   segments_before  — inserted to the LEFT  of the line-justice segment
+---   segments_after   — inserted to the RIGHT of the line-justice segment
+---
+--- Any key in `options` is shallow-merged into the top-level statuscol.setup()
+--- table. Keys that line-justice already manages (relculright, bt_ignore,
+--- segments) are ignored — use segments_before / segments_after instead.
+---
+--- Example — gitsigns sign column on the left, line-justice numbers on the right:
+---
+---   statuscol = {
+---     segments_before = {
+---       { text = { "%s" }, click = "v:lua.ScSa" },
+---     },
+---   }
+---
+---@class LineJusticeStatuscolPassthrough
+---@field segments_before? table[]  statuscol segments prepended before the line-justice segment
+---@field segments_after?  table[]  statuscol segments appended after  the line-justice segment
+---@field options?         table    Extra top-level keys merged into statuscol.setup() (segments/relculright/bt_ignore are ignored)
+
 ---Top-level configuration table passed to setup().
 ---All keys are optional — omitting them uses the defaults shown below.
 ---
 ---@class LineJusticeConfig
 ---@field line_numbers?  LineJusticeLineNumbers
 ---@field wrapped_lines? LineJusticeWrappedLines
+---@field statuscol?     LineJusticeStatuscolPassthrough
 
 -- ---------------------------------------------------------------------------
 -- Defaults
@@ -101,6 +134,11 @@ local defaults = {
   wrapped_lines = {
     indicator = "Bar",    -- blank gutter on wrapped lines (no character shown)
     custom    = "",        -- only used when indicator = "Custom"
+  },
+  statuscol = {
+    segments_before = {},  -- no extra segments before the line-justice segment
+    segments_after  = {},  -- no extra segments after  the line-justice segment
+    options         = {},  -- no extra top-level statuscol options
   },
 }
 
@@ -360,8 +398,9 @@ function M._setup_statuscol()
     return
   end
 
-  local ln_cfg = config.line_numbers
-  local wl_cfg = config.wrapped_lines
+  local ln_cfg  = config.line_numbers
+  local wl_cfg  = config.wrapped_lines
+  local sc_cfg  = config.statuscol or {}
 
   -- Resolve the named theme into a concrete colour table via the registry
   local theme_tbl = {}
@@ -389,76 +428,101 @@ function M._setup_statuscol()
     callback = function() resolve_highlights(ln_cfg.overrides, theme_tbl) end,
   })
 
+  -- ── Build the line-justice segment ──────────────────────────────────────
+  local lj_segment = {
+    text = {
+      function(args)
+        if args.virtnum == 0 then
+          -- ── Absolute line number highlight ──────────────────────────
+          local abs_hl
+          if args.relnum == 0 then
+            abs_hl = "%#LineJusticeCursorLine#"
+          elseif args.lnum > vim.fn.line(".") then
+            abs_hl = "%#LineJusticeAbsoluteBelow#"
+          else
+            abs_hl = "%#LineJusticeAbsoluteAbove#"
+          end
+
+          -- ── Relative line number highlight ──────────────────────────
+          local rel_hl
+          if args.relnum == 0 then
+            rel_hl = "%#LineJusticeCursorLine#"
+          elseif args.lnum > vim.fn.line(".") then
+            rel_hl = "%#LineJusticeRelativeBelow#"
+          else
+            rel_hl = "%#LineJusticeRelativeAbove#"
+          end
+
+          -- ── Format both numbers ─────────────────────────────────────
+          local abs_num = format_line_number(args.lnum)
+          -- Cursor line: leave the relative column blank (never show "0")
+          local rel_num = args.relnum == 0 and "" or format_line_number(args.relnum)
+
+          -- ── Fixed-width columns (accounts for thousands-separator commas)
+          local total_lines = vim.fn.line("$")
+          local num_digits  = #tostring(total_lines)
+          local num_commas  = math.floor((num_digits - 1) / 3)
+          local col_w       = num_digits + num_commas
+
+          -- Right-align the absolute number
+          abs_num = string.rep(" ", math.max(0, col_w - #abs_num)) .. abs_num
+
+          -- Pad the relative number so the total gutter width stays fixed
+          local target_w  = col_w + 1 + col_w
+          local current_w = #abs_num + 1 + #rel_num
+          local rel_pad   = string.rep(" ", math.max(0, target_w - current_w))
+
+          return abs_hl .. abs_num .. " " .. rel_hl .. rel_num .. rel_pad
+
+        else
+          -- ── Soft-wrapped continuation line ──────────────────────────
+          -- Calculate the total gutter width (same formula as above so
+          -- the indicator is always centred in the correct field).
+          local total_lines = vim.fn.line("$")
+          local num_digits  = #tostring(total_lines)
+          local num_commas  = math.floor((num_digits - 1) / 3)
+          local col_w       = num_digits + num_commas
+          local gutter_w    = col_w + 1 + col_w
+
+          -- Centre the indicator in the full gutter width
+          local centred = centre(indicator_char, gutter_w)
+          return "%#LineJusticeWrappedLine#" .. centred
+        end
+      end,
+    },
+    click = "v:lua.ScLa",
+  }
+
+  -- ── Assemble the full segments list ─────────────────────────────────────
+  -- User-supplied segments_before and segments_after sandwich the LJ segment.
+  -- Both default to empty tables so the common case has no overhead.
+  local segments = {}
+  for _, seg in ipairs(sc_cfg.segments_before or {}) do
+    segments[#segments + 1] = seg
+  end
+  segments[#segments + 1] = lj_segment
+  for _, seg in ipairs(sc_cfg.segments_after or {}) do
+    segments[#segments + 1] = seg
+  end
+
+  -- ── Merge any extra top-level statuscol options ──────────────────────────
+  -- Keys that line-justice owns (relculright, bt_ignore, segments) are always
+  -- set by us and cannot be overridden via statuscol.options — this keeps the
+  -- plugin's core behaviour predictable regardless of what the user passes.
+  local extra_opts = {}
+  for k, v in pairs(sc_cfg.options or {}) do
+    if k ~= "relculright" and k ~= "bt_ignore" and k ~= "segments" then
+      extra_opts[k] = v
+    end
+  end
+
   -- Wire up the statuscol.nvim segment
-  statuscol.setup({
+  local statuscol_cfg = vim.tbl_extend("force", extra_opts, {
     relculright = INTERNAL.relculright,
     bt_ignore   = INTERNAL.bt_ignore,
-    segments = {
-      {
-        text = {
-          function(args)
-            if args.virtnum == 0 then
-              -- ── Absolute line number highlight ──────────────────────────
-              local abs_hl
-              if args.relnum == 0 then
-                abs_hl = "%#LineJusticeCursorLine#"
-              elseif args.lnum > vim.fn.line(".") then
-                abs_hl = "%#LineJusticeAbsoluteBelow#"
-              else
-                abs_hl = "%#LineJusticeAbsoluteAbove#"
-              end
-
-              -- ── Relative line number highlight ──────────────────────────
-              local rel_hl
-              if args.relnum == 0 then
-                rel_hl = "%#LineJusticeCursorLine#"
-              elseif args.lnum > vim.fn.line(".") then
-                rel_hl = "%#LineJusticeRelativeBelow#"
-              else
-                rel_hl = "%#LineJusticeRelativeAbove#"
-              end
-
-              -- ── Format both numbers ─────────────────────────────────────
-              local abs_num = format_line_number(args.lnum)
-              -- Cursor line: leave the relative column blank (never show "0")
-              local rel_num = args.relnum == 0 and "" or format_line_number(args.relnum)
-
-              -- ── Fixed-width columns (accounts for thousands-separator commas)
-              local total_lines = vim.fn.line("$")
-              local num_digits  = #tostring(total_lines)
-              local num_commas  = math.floor((num_digits - 1) / 3)
-              local col_w       = num_digits + num_commas
-
-              -- Right-align the absolute number
-              abs_num = string.rep(" ", math.max(0, col_w - #abs_num)) .. abs_num
-
-              -- Pad the relative number so the total gutter width stays fixed
-              local target_w  = col_w + 1 + col_w
-              local current_w = #abs_num + 1 + #rel_num
-              local rel_pad   = string.rep(" ", math.max(0, target_w - current_w))
-
-              return abs_hl .. abs_num .. " " .. rel_hl .. rel_num .. rel_pad
-
-            else
-              -- ── Soft-wrapped continuation line ──────────────────────────
-              -- Calculate the total gutter width (same formula as above so
-              -- the indicator is always centred in the correct field).
-              local total_lines = vim.fn.line("$")
-              local num_digits  = #tostring(total_lines)
-              local num_commas  = math.floor((num_digits - 1) / 3)
-              local col_w       = num_digits + num_commas
-              local gutter_w    = col_w + 1 + col_w
-
-              -- Centre the indicator in the full gutter width
-              local centred = centre(indicator_char, gutter_w)
-              return "%#LineJusticeWrappedLine#" .. centred
-            end
-          end,
-        },
-        click = "v:lua.ScLa",
-      },
-    },
+    segments    = segments,
   })
+  statuscol.setup(statuscol_cfg)
 end
 
 -- ---------------------------------------------------------------------------
@@ -542,6 +606,37 @@ end
 --- More custom examples:
 ---   custom = "»"   custom = "▸"   custom = "→"   custom = "╰"
 ---
+--- ── statuscol passthrough — gitsigns integration ──────────────────────────
+---
+--- Add a gitsigns sign column to the LEFT of the line-justice numbers:
+---
+---   require("line-justice").setup({
+---     statuscol = {
+---       segments_before = {
+---         { text = { "%s" }, click = "v:lua.ScSa" },
+---       },
+---     },
+---   })
+---
+--- Add a segment to the RIGHT instead:
+---
+---   require("line-justice").setup({
+---     statuscol = {
+---       segments_after = {
+---         { text = { "%s" }, click = "v:lua.ScSa" },
+---       },
+---     },
+---   })
+---
+--- Pass extra top-level statuscol options (segments/relculright/bt_ignore
+--- are always controlled by line-justice and will be ignored here):
+---
+---   require("line-justice").setup({
+---     statuscol = {
+---       options = { ft_ignore = { "NvimTree" } },
+---     },
+---   })
+---
 --- ── Full configuration example ────────────────────────────────────────────
 ---
 ---   require("line-justice").setup({
@@ -554,6 +649,11 @@ end
 ---     wrapped_lines = {
 ---       indicator = "Custom",
 ---       custom    = "╰",
+---     },
+---     statuscol = {
+---       segments_before = {
+---         { text = { "%s" }, click = "v:lua.ScSa" },
+---       },
 ---     },
 ---   })
 ---

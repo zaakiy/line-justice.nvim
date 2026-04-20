@@ -105,6 +105,8 @@ M.setup(opts)
         ├─ resolve_indicator(config.wrapped_lines)
         │    → indicator_char  (string, may be "")
         │
+        ├─ read config.statuscol (segments_before, segments_after, options)
+        │
         ├─ resolve_highlights(overrides, theme_tbl)
         │    → sets NeoVim hl groups: LineJustice{CursorLine,AbsoluteAbove,
         │      AbsoluteBelow,RelativeAbove,RelativeBelow,WrappedLine}
@@ -146,9 +148,13 @@ LineJusticeConfig
 │       ├── RelativeAbove?  { fg }
 │       ├── RelativeBelow?  { fg }
 │       └── WrappedLine?    { fg, italic? }
-└── wrapped_lines (LineJusticeWrappedLines)
-    ├── indicator  string   "None"|"Arrow"|"Chevron"|"Dot"|"Ellipsis"|"Bar"|"Custom"
-    └── custom     string   character used when indicator="Custom"
+├── wrapped_lines (LineJusticeWrappedLines)
+│   ├── indicator  string   "None"|"Arrow"|"Chevron"|"Dot"|"Ellipsis"|"Bar"|"Custom"
+│   └── custom     string   character used when indicator="Custom"
+└── statuscol     (LineJusticeStatuscolPassthrough)
+    ├── segments_before  table[]   statuscol segments prepended before the LJ segment
+    ├── segments_after   table[]   statuscol segments appended after  the LJ segment
+    └── options          table     extra top-level keys merged into statuscol.setup()
 ```
 
 ### Defaults
@@ -162,6 +168,11 @@ LineJusticeConfig
   wrapped_lines = {
     indicator = "None",
     custom    = "",
+  },
+  statuscol = {
+    segments_before = {},
+    segments_after  = {},
+    options         = {},
   },
 }
 ```
@@ -311,6 +322,34 @@ Prefixed with `_` to signal it is internal. Called by `setup()`. Users should ne
 
 ---
 
+## 9a. statuscol Passthrough
+
+The `statuscol` config key lets users inject additional statuscol segments and options without touching statuscol.nvim directly.
+
+| Key | Type | Description |
+|---|---|---|
+| `segments_before` | `table[]` | statuscol segments prepended **before** the line-justice segment |
+| `segments_after` | `table[]` | statuscol segments appended **after** the line-justice segment |
+| `options` | `table` | Extra top-level keys shallow-merged into `statuscol.setup()`. `relculright`, `bt_ignore`, `segments` are always ignored here. |
+
+### gitsigns example
+
+```lua
+-- gitsigns setup (separate plugin config):
+require("gitsigns").setup({ numhl = true, signcolumn = true })
+
+-- line-justice setup:
+require("line-justice").setup({
+  statuscol = {
+    segments_before = {
+      { text = { "%s" }, click = "v:lua.ScSa" },
+    },
+  },
+})
+```
+
+---
+
 ## 8. Internal Helpers Reference
 
 All helpers are `local` to `init.lua` and not exported.
@@ -331,6 +370,15 @@ line-justice delegates **all** statuscolumn rendering to `luukvbaal/statuscol.nv
 
 ### Segment logic (inside `M._setup_statuscol`)
 
+The function builds a single `lj_segment` closure, then assembles the final
+`segments` list as:
+
+```
+[ ...sc_cfg.segments_before ]  ++  [ lj_segment ]  ++  [ ...sc_cfg.segments_after ]
+```
+
+The `lj_segment` closure logic:
+
 ```
 args.virtnum == 0  (real line)
   → abs_hl  based on: relnum==0 (cursor) / lnum > cursor (below) / else (above)
@@ -343,6 +391,10 @@ args.virtnum == 0  (real line)
 args.virtnum != 0  (soft-wrapped continuation)
   → return "%#LineJusticeWrappedLine#" .. centre(indicator_char, gutter_w)
 ```
+
+Extra top-level statuscol options from `sc_cfg.options` are shallow-merged
+into the final `statuscol.setup()` call. The keys `relculright`, `bt_ignore`,
+and `segments` are always owned by line-justice and cannot be overridden.
 
 ### Column-width formula
 
@@ -556,6 +608,8 @@ There is currently no automated test suite. All testing is manual. Before any no
 - [ ] **Large files** (1,000+ lines) — thousands separators appear in both the absolute and relative columns; gutter widens automatically at the 1k/10k/100k boundaries; column widths are identical in both the real-line and wrapped-line code paths; no performance degradation at 10,000+ lines.
 - [ ] **Missing statuscol.nvim** — emits WARN, does not crash NeoVim.
 - [ ] **Plugin buffers** (file tree, dashboard, picker) — no custom statuscolumn applied.
+- [ ] **statuscol passthrough** — `segments_before` / `segments_after` appear in the correct order around the line-justice segment; gitsigns signs render correctly.
+- [ ] **`statuscol.options`** — extra top-level keys are forwarded; `relculright`, `bt_ignore`, `segments` are silently ignored.
 - [ ] **Multiple `setup()` calls** — no duplicate autocmds, no crash.
 - [ ] **Cross-platform** — Linux, macOS, Windows (WSL).
 

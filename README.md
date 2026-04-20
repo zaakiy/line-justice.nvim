@@ -190,6 +190,58 @@ line_numbers = {
 
 ---
 
+## statuscol Passthrough
+
+line-justice owns exactly one statuscol segment — the dual line-number renderer. The `statuscol` passthrough lets you place additional statuscol segments **before** or **after** that segment, so other plugins (most commonly **gitsigns**) can coexist in the same statuscolumn without you having to configure `statuscol.nvim` directly.
+
+### gitsigns integration
+
+Enable `numhl` and `signcolumn` in gitsigns, then add its sign column as a `segments_before` entry so it sits to the **left** of the line-justice numbers:
+
+```lua
+-- In your gitsigns setup:
+require("gitsigns").setup({
+  numhl      = true,
+  signcolumn = true,
+})
+
+-- In your line-justice setup:
+require("line-justice").setup({
+  line_numbers  = { theme = "Horizon" },
+  wrapped_lines = { indicator = "Bar" },
+  statuscol = {
+    segments_before = {
+      -- "%s" renders the sign column; ScSa is the statuscol click handler
+      { text = { "%s" }, click = "v:lua.ScSa" },
+    },
+  },
+})
+```
+
+To place a segment to the **right** of the line-justice numbers instead, use `segments_after`:
+
+```lua
+statuscol = {
+  segments_after = {
+    { text = { "%s" }, click = "v:lua.ScSa" },
+  },
+},
+```
+
+### Extra statuscol top-level options
+
+Pass any `statuscol.setup()` key that line-justice does not manage via `statuscol.options`. The keys `relculright`, `bt_ignore`, and `segments` are always controlled by line-justice and will be silently ignored if provided here.
+
+```lua
+statuscol = {
+  options = {
+    ft_ignore = { "NvimTree", "neo-tree" },
+  },
+},
+```
+
+---
+
 ## Built-in Themes
 
 Three colour themes ship out of the box:
