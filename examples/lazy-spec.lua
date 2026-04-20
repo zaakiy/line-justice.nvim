@@ -24,6 +24,27 @@
 --   Examples: "»", "⤷", "▸", "→", "╰"
 --
 -- ─────────────────────────────────────────────────────────────────────────────
+-- STATUSCOL PASSTHROUGH
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- line-justice owns exactly one statuscol segment (the dual line-number
+-- renderer). The statuscol passthrough lets you add extra segments around it
+-- so that other plugins — most commonly gitsigns — can coexist in the same
+-- statuscolumn without you having to configure statuscol.nvim directly.
+--
+-- statuscol.segments_before  (table[])
+--   statuscol segments inserted to the LEFT of the line-justice segment.
+--   Typical use: gitsigns sign column, diagnostic signs.
+--
+-- statuscol.segments_after  (table[])
+--   statuscol segments inserted to the RIGHT of the line-justice segment.
+--
+-- statuscol.options  (table)
+--   Extra top-level keys merged into statuscol.setup().
+--   The keys relculright, bt_ignore, and segments are always controlled by
+--   line-justice and will be silently ignored if provided here.
+--
+-- ─────────────────────────────────────────────────────────────────────────────
 -- COLOUR THEMES
 -- ─────────────────────────────────────────────────────────────────────────────
 --
@@ -116,6 +137,37 @@ return {
   --   wrapped_lines = {
   --     indicator = "Custom",
   --     custom    = "╰",
+  --   },
+  -- },
+
+  -- ── Option J: gitsigns sign column on the left ────────────────────────────
+  -- Requires gitsigns.nvim. Enable numhl in gitsigns and add its sign column
+  -- as a segment_before so it sits to the left of the line-justice numbers.
+  --
+  -- In your gitsigns setup:
+  --   require("gitsigns").setup({ numhl = true, signcolumn = true })
+  --
+  -- opts = {
+  --   line_numbers  = { theme = "Horizon" },
+  --   wrapped_lines = { indicator = "Bar" },
+  --   statuscol = {
+  --     segments_before = {
+  --       -- "%s" renders the sign column; ScSa is the click handler
+  --       { text = { "%s" }, click = "v:lua.ScSa" },
+  --     },
+  --   },
+  -- },
+
+  -- ── Option K: extra statuscol top-level options ───────────────────────────
+  -- Pass any statuscol.setup() key that line-justice does not manage.
+  -- (relculright, bt_ignore, and segments are always owned by line-justice.)
+  --
+  -- opts = {
+  --   line_numbers  = { theme = "Horizon" },
+  --   statuscol = {
+  --     options = {
+  --       ft_ignore = { "NvimTree", "neo-tree" },
+  --     },
   --   },
   -- },
 }
