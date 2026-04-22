@@ -408,6 +408,11 @@ local function _segment(args)
     return ""
   end
 
+  -- Do not render in nofile buffers (e.g. file trees, dashboards, pickers)
+  if vim.bo.buftype == "nofile" then
+    return ""
+  end
+
   if args.virtnum == 0 then
     -- ── Real line ────────────────────────────────────────────────────────
 
