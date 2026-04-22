@@ -55,7 +55,7 @@ When you need to jump, you use the relative number. When you reference, you use 
 {
   "zaakiy/line-justice.nvim",
   dependencies = { "luukvbaal/statuscol.nvim" },
-  event = "VeryLazy",
+  lazy = false,
   opts = {
     line_numbers  = { theme = "Horizon" },
     wrapped_lines = { indicator = "None" },

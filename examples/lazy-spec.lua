@@ -62,7 +62,7 @@
 return {
   "zaakiy/line-justice.nvim",
   dependencies = { "luukvbaal/statuscol.nvim" },
-  event = "VeryLazy",
+  lazy = false,
 
   -- ── Option A: defaults — Horizon theme, no wrapped indicator ──────────────
   opts = {
