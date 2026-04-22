@@ -38,11 +38,11 @@
 - The **cursor line** itself is highlighted distinctly (no relative number shown — it would always be `0`).
 - Soft-wrapped continuation lines show a configurable indicator character instead of any numbers.
 
-All rendering is delegated to [`luukvbaal/statuscol.nvim`](https://github.com/luukvbaal/statuscol.nvim).
+line-justice is a **statuscol.nvim segment provider**. It owns colour themes, highlight groups, number formatting, and wrapped-line rendering. It does **not** call `statuscol.setup()` — the user wires `require("line-justice").segment` into their own statuscol config. This eliminates any conflict with existing statuscol configurations.
 
-**Minimum NeoVim version:** 0.10  
-**Language:** Lua  
-**License:** Apache 2.0  
+**Minimum NeoVim version:** 0.10
+**Language:** Lua
+**License:** Apache 2.0
 **Remote:** `https://github.com/zaakiy/line-justice.nvim`
 
 ---
@@ -53,7 +53,7 @@ All rendering is delegated to [`luukvbaal/statuscol.nvim`](https://github.com/lu
 line-justice.nvim/
 ├── lua/
 │   └── line-justice/
-│       ├── init.lua                ← Plugin entry point, config, statuscol wiring
+│       ├── init.lua                ← Plugin core: types, defaults, state, segment, highlights, public API
 │       └── themes/
 │           ├── init.lua            ← Theme registry (register, get, list, exists)
 │           ├── horizon.lua         ← Built-in Horizon theme spec
@@ -62,7 +62,7 @@ line-justice.nvim/
 ├── plugin/
 │   └── line-justice.lua      ← Auto-sourced entry point; double-load guard + version check
 ├── examples/
-│   ├── lazy-spec.lua         ← Full lazy.nvim plugin spec with Options A–I
+│   ├── lazy-spec.lua         ← Full lazy.nvim plugin spec with annotated options
 │   └── custom-theme.lua      ← Annotated example showing how to author and register a custom theme
 ├── README.md                 ← End-user documentation
 ├── SYSTEM_PROMPT.md          ← AI-assistant development context (gitignored)
@@ -74,13 +74,13 @@ line-justice.nvim/
 
 | File | Role |
 |---|---|
-| `lua/line-justice/init.lua` | Plugin entry point. Contains types, defaults, helpers, highlight resolution, statuscol wiring, and public API. Theme data moved to `themes/`. |
+| `lua/line-justice/init.lua` | Plugin core. Contains types, defaults, mutable render state, segment function, highlight resolution, and public API. |
 | `lua/line-justice/themes/init.lua` | Theme registry. Exposes `register()`, `get()`, `list()`, `exists()`. Loads built-in specs lazily. |
 | `lua/line-justice/themes/horizon.lua` | Horizon theme spec (`LineJusticeThemeSpec`). |
 | `lua/line-justice/themes/dawn.lua` | Dawn theme spec — warm amber and rose tones. |
 | `lua/line-justice/themes/midnight.lua` | Midnight theme spec — cool monochrome blue-greys. |
 | `examples/custom-theme.lua` | Annotated example showing how to author and register a custom theme. |
-| `plugin/line-justice.lua` | NeoVim auto-sources everything under `plugin/`. This file sets `vim.g.loaded_line_justice` to prevent double-loading and checks `nvim-0.10`. |
+| `plugin/line-justice.lua` | NeoVim auto-sources everything under `plugin/`. Sets `vim.g.loaded_line_justice` to prevent double-loading and checks `nvim-0.10`. |
 | `examples/lazy-spec.lua` | Not loaded by NeoVim. Purely illustrative for users installing via lazy.nvim. |
 | `SYSTEM_PROMPT.md` | Listed in `.gitignore`. Not shipped. Used for AI-assisted development sessions. |
 
@@ -89,35 +89,32 @@ line-justice.nvim/
 ## 3. Architecture & Data Flow
 
 ```
-User calls require("line-justice").setup(opts)
-        │
-        ▼
-M.setup(opts)
+Module load  (require("line-justice"))
+  └─ _state  initialised: { indicator_char = "", ready = false }
+  └─ M.segment  assigned to _segment function (never nil from this point)
+
+User calls lj.setup(opts)
   └─ vim.tbl_deep_extend("force", defaults, opts)  → config
-  └─ M._setup_statuscol()
-        │
-        ├─ require("statuscol")            [errors with vim.notify WARN if absent]
-        │
-        ├─ Resolve theme table
-        │    M.themes.get(config.line_numbers.theme)  or {}
-        │    (loads from themes/init.lua registry; built-ins lazy-loaded)
-        │
-        ├─ resolve_indicator(config.wrapped_lines)
-        │    → indicator_char  (string, may be "")
-        │
-        ├─ read config.statuscol (segments_before, segments_after, options)
-        │
-        ├─ resolve_highlights(overrides, theme_tbl)
-        │    → sets NeoVim hl groups: LineJustice{CursorLine,AbsoluteAbove,
-        │      AbsoluteBelow,RelativeAbove,RelativeBelow,WrappedLine}
-        │
-        ├─ vim.api.nvim_create_autocmd("ColorScheme", ...)
-        │    → re-runs resolve_highlights on every :colorscheme change
-        │
-        └─ statuscol.setup({ segments = { { text = { fn } } } })
-               └─ fn(args) called by statuscol for every statuscolumn render
-                    args.virtnum == 0  → real line  → abs + rel numbers
-                    args.virtnum != 0  → wrap line  → centred indicator_char
+  └─ M.themes.get(config.line_numbers.theme)        → theme_tbl
+  └─ resolve_indicator(config.wrapped_lines)         → indicator_char
+  └─ vim.o.number = true, vim.o.relativenumber = true
+  └─ resolve_highlights(overrides, theme_tbl)
+  │    → registers LineJustice{CursorLine,AbsoluteAbove,AbsoluteBelow,
+  │      RelativeAbove,RelativeBelow,WrappedLine} via nvim_set_hl
+  └─ nvim_create_autocmd("ColorScheme")
+  │    → re-runs resolve_highlights on every :colorscheme change
+  └─ _state.indicator_char = indicator_char
+  └─ _state.ready = true
+
+User wires into statuscol (in their own config, not done by line-justice):
+  require("statuscol").setup({
+    segments = { { text = { lj.segment }, click = "v:lua.ScLa" } },
+  })
+
+statuscol calls M.segment (= _segment) for every statuscolumn render:
+  _state.ready == false  → one-shot ERROR notify, return ""
+  args.virtnum == 0      → real line  → abs + rel numbers
+  args.virtnum != 0      → wrap line  → centred _state.indicator_char
 ```
 
 ### Highlight group names registered
@@ -148,13 +145,9 @@ LineJusticeConfig
 │       ├── RelativeAbove?  { fg }
 │       ├── RelativeBelow?  { fg }
 │       └── WrappedLine?    { fg, italic? }
-├── wrapped_lines (LineJusticeWrappedLines)
-│   ├── indicator  string   "None"|"Arrow"|"Chevron"|"Dot"|"Ellipsis"|"Bar"|"Custom"
-│   └── custom     string   character used when indicator="Custom"
-└── statuscol     (LineJusticeStatuscolPassthrough)
-    ├── segments_before  table[]   statuscol segments prepended before the LJ segment
-    ├── segments_after   table[]   statuscol segments appended after  the LJ segment
-    └── options          table     extra top-level keys merged into statuscol.setup()
+└── wrapped_lines (LineJusticeWrappedLines)
+    ├── indicator  string   "None"|"Arrow"|"Chevron"|"Dot"|"Ellipsis"|"Bar"|"Custom"
+    └── custom     string   character used when indicator="Custom"
 ```
 
 ### Defaults
@@ -166,27 +159,11 @@ LineJusticeConfig
     overrides = {},
   },
   wrapped_lines = {
-    indicator = "None",
+    indicator = "Bar",
     custom    = "",
   },
-  statuscol = {
-    segments_before = {},
-    segments_after  = {},
-    options         = {},
-  },
 }
 ```
-
-### Internal constants (not user-facing)
-
-```lua
-INTERNAL = {
-  bt_ignore   = { "nofile" },  -- skip plugin-managed buffers (file trees, dashboards, etc.)
-  relculright = true,          -- right-align cursor-line number in relative column
-}
-```
-
-These are passed directly to `statuscol.setup()` and are **intentionally hidden** from users. Do not expose them in the public API without good reason.
 
 ### Config merging
 
@@ -267,19 +244,19 @@ Three themes ship out of the box. All are defined as `LineJusticeThemeSpec` file
 
 | Name | Character | Description |
 |---|---|---|
-| `"None"` | _(empty string)_ | Default — blank gutter |
+| `"None"` | _(empty string)_ | Blank gutter |
 | `"Arrow"` | `↳` | Classic turn-down arrow |
 | `"Chevron"` | `›` | Single right chevron |
 | `"Dot"` | `·` | Middle dot |
 | `"Ellipsis"` | `…` | Horizontal ellipsis |
-| `"Bar"` | `│` | Thin vertical bar |
+| `"Bar"` | `│` | Thin vertical bar **(default)** |
 | `"Custom"` | _(user-defined)_ | `wrapped_lines.custom` value |
 
 ### Validation (`resolve_indicator`)
 
 - `"Custom"` with empty `custom` → `vim.notify` WARN, returns `""`.
 - Unknown preset name → `vim.notify` WARN (lists valid names), returns `""`.
-- Resolved once at `setup()` time; the result (`indicator_char`) is captured in the statuscol segment closure.
+- Resolved once at `setup()` time; stored in `_state.indicator_char`.
 
 ### Centering (`centre` helper)
 
@@ -291,14 +268,29 @@ The indicator character is centred in the total gutter width using the same widt
 
 ### `require("line-justice").setup(opts?)`
 
-Initialises the plugin. Safe to call multiple times (re-creates highlights and re-wires statuscol). `opts` is deep-merged with defaults — all keys are optional.
+Initialises the plugin. Safe to call multiple times — re-resolves highlights, re-creates the ColorScheme autocmd (idempotent via `{ clear = true }`), and updates `_state` so the already-captured segment immediately reflects new config. `opts` is deep-merged with defaults — all keys are optional.
 
 ```lua
-require("line-justice").setup({
-  line_numbers  = { theme = "Horizon" },
-  wrapped_lines = { indicator = "None" },
+local lj = require("line-justice")
+lj.setup({ line_numbers = { theme = "Horizon" } })
+```
+
+### `require("line-justice").segment`
+
+The statuscol segment function. Assigned at **module load** — never `nil`. Wire it into your statuscol config after calling `setup()`:
+
+```lua
+require("statuscol").setup({
+  segments = {
+    { text = { lj.segment }, click = "v:lua.ScLa" },
+  },
 })
 ```
+
+**Key properties:**
+- Never `nil` — safe to capture before `setup()` is called
+- Closes over `_state` — re-`setup()` updates take effect immediately without re-wiring statuscol
+- If rendered before `setup()`: emits a one-shot `ERROR` notification and returns `""`
 
 ### `require("line-justice").get_config()`
 
@@ -312,40 +304,8 @@ The theme registry, exposed as a public sub-module. See [Section 12](#12-theme-c
 local themes = require("line-justice").themes
 themes.register(spec)    -- register a custom theme
 themes.list()            -- list all available theme names
-themes.exists("Dawn")   -- check if a theme is available
-themes.get("Midnight")  -- get a theme's colors table
-```
-
-### `M._setup_statuscol()` _(private)_
-
-Prefixed with `_` to signal it is internal. Called by `setup()`. Users should never call this directly — it always requires `config` to be populated first.
-
----
-
-## 9a. statuscol Passthrough
-
-The `statuscol` config key lets users inject additional statuscol segments and options without touching statuscol.nvim directly.
-
-| Key | Type | Description |
-|---|---|---|
-| `segments_before` | `table[]` | statuscol segments prepended **before** the line-justice segment |
-| `segments_after` | `table[]` | statuscol segments appended **after** the line-justice segment |
-| `options` | `table` | Extra top-level keys shallow-merged into `statuscol.setup()`. `relculright`, `bt_ignore`, `segments` are always ignored here. |
-
-### gitsigns example
-
-```lua
--- gitsigns setup (separate plugin config):
-require("gitsigns").setup({ numhl = true, signcolumn = true })
-
--- line-justice setup:
-require("line-justice").setup({
-  statuscol = {
-    segments_before = {
-      { text = { "%s" }, click = "v:lua.ScSa" },
-    },
-  },
-})
+themes.exists("Dawn")    -- check if a theme is available
+themes.get("Midnight")   -- get a theme's colors table
 ```
 
 ---
@@ -366,20 +326,26 @@ All helpers are `local` to `init.lua` and not exported.
 
 ## 9. statuscol.nvim Integration
 
-line-justice delegates **all** statuscolumn rendering to `luukvbaal/statuscol.nvim`. It registers a single custom segment with a closure over `indicator_char`.
+### Responsibility boundary
 
-### Segment logic (inside `M._setup_statuscol`)
+line-justice is a **segment provider**, not a statuscol configurator.
 
-The function builds a single `lj_segment` closure, then assembles the final
-`segments` list as:
+| Owned by line-justice | Owned by the user (via statuscol) |
+|---|---|
+| Highlight group registration | `statuscol.setup()` call |
+| Colour theme resolution | Segment placement and ordering |
+| Number formatting and rendering | Other segments (signs, folds, etc.) |
+| Wrapped-line indicator | `relculright`, `bt_ignore`, `ft_ignore`, … |
+| `vim.o.number` / `vim.o.relativenumber` | Everything else |
+
+line-justice **never** calls `statuscol.setup()`. This eliminates the entire class of conflict that arises when two plugins both try to own statuscol configuration.
+
+### Segment logic (`_segment` function)
 
 ```
-[ ...sc_cfg.segments_before ]  ++  [ lj_segment ]  ++  [ ...sc_cfg.segments_after ]
-```
+_state.ready == false
+  → one-shot ERROR notify (rate-limited by _warned_not_ready flag), return ""
 
-The `lj_segment` closure logic:
-
-```
 args.virtnum == 0  (real line)
   → abs_hl  based on: relnum==0 (cursor) / lnum > cursor (below) / else (above)
   → rel_hl  based on: relnum==0 (cursor) / lnum > cursor (below) / else (above)
@@ -389,12 +355,19 @@ args.virtnum == 0  (real line)
   → return "%#HL#" .. abs_num .. " " .. "%#HL#" .. rel_num .. padding
 
 args.virtnum != 0  (soft-wrapped continuation)
-  → return "%#LineJusticeWrappedLine#" .. centre(indicator_char, gutter_w)
+  → return "%#LineJusticeWrappedLine#" .. centre(_state.indicator_char, gutter_w)
 ```
 
-Extra top-level statuscol options from `sc_cfg.options` are shallow-merged
-into the final `statuscol.setup()` call. The keys `relculright`, `bt_ignore`,
-and `segments` are always owned by line-justice and cannot be overridden.
+### `_state` — mutable render state
+
+```lua
+local _state = {
+  indicator_char = "",     -- resolved wrapped-line character; updated by setup()
+  ready          = false,  -- true once setup() has been called at least once
+}
+```
+
+`_state` contains **only what the segment needs at render time that isn't already handled by the highlight group layer**. Colours are updated in place via `nvim_set_hl` and picked up automatically by the highlight group name strings in the segment — no colour state is needed in `_state`.
 
 ### Column-width formula
 
@@ -407,11 +380,19 @@ local gutter_w   = col_w + 1 + col_w
 
 This means columns automatically grow as the file grows — no manual width configuration needed. A 999-line file uses a 3-char column; a 1,000-line file promotes to 5 chars (`1,000`); a 10,000-line file uses 6 chars (`10,000`). Both the real-line path and the wrapped-line path use the **exact same formula** — keep them in sync or the wrapped indicator will be off-centre.
 
-> **Note:** No code file _needs_ to be so long that its line numbers require a comma. But if it is, at least both people staring at the gutter during a pair-programming session will be looking at the same, clearly formatted number.
+### Placing other plugins alongside line-justice
 
-### `bt_ignore`
+Because line-justice never calls `statuscol.setup()`, the user can freely place other segments around `lj.segment`:
 
-Set to `{ "nofile" }`. This prevents statuscol from applying the custom segment to plugin-managed buffers (file explorers, dashboards, pickers, floating windows, etc.). This is considered sufficient coverage; the original `ft_ignore` approach was deliberately removed in favour of the simpler `bt_ignore`.
+```lua
+require("statuscol").setup({
+  segments = {
+    { text = { "%s" },        click = "v:lua.ScSa" }, -- gitsigns signs (left)
+    { text = { lj.segment },  click = "v:lua.ScLa" }, -- line-justice numbers
+    { text = { "%C" },        click = "v:lua.ScFa" }, -- fold column (right)
+  },
+})
+```
 
 ---
 
@@ -446,24 +427,25 @@ local defaults = {
   },
 }
 
--- 2. Create internal setup function
----@private
-function M._setup_my_feature()
-  if not config.my_feature.enabled then return end
-  -- implementation
-end
+-- 2. If the feature needs render-time state, add it to _state
+local _state = {
+  indicator_char = "",
+  ready          = false,
+  my_feature_val = nil,  -- new field
+}
 
--- 3. Call from M.setup()
+-- 3. Populate _state in setup()
 function M.setup(opts)
   config = vim.tbl_deep_extend("force", defaults, opts or {})
-  M._setup_statuscol()
-  M._setup_my_feature()
+  -- ... existing setup logic ...
+  _state.my_feature_val = resolve_my_feature(config.my_feature)
+  _state.ready = true
 end
 ```
 
-### Do not expose INTERNAL constants
+### Do not call `statuscol.setup()`
 
-The `INTERNAL` table (`bt_ignore`, `relculright`) is intentionally hidden from users. These values tune statuscol.nvim's behaviour and should remain internal implementation details.
+line-justice must never call `statuscol.setup()`. The segment is exposed via `M.segment` for the user to wire in themselves. This is a deliberate architectural boundary — see [Section 9](#9-statuscolnvim-integration).
 
 ---
 
@@ -471,8 +453,8 @@ The `INTERNAL` table (`bt_ignore`, `relculright`) is intentionally hidden from u
 
 1. **Add default config** to the `defaults` table in `init.lua`.
 2. **Add LuaDoc types** — create or extend a `@class` if the feature introduces new config keys.
-3. **Implement** in a private `M._setup_<feature>()` function.
-4. **Call it** conditionally from `M.setup()`.
+3. **Implement** — if render-time state is needed, add a field to `_state` and populate it in `setup()`. Otherwise, register highlights or autocmds directly in `setup()`.
+4. **Update `_segment`** if the feature changes rendering output.
 5. **Update README.md** — new config section, examples.
 6. **Update `examples/lazy-spec.lua`** if the feature changes the recommended lazy.nvim spec.
 7. **Test** with and without optional dependencies; test with defaults only.
@@ -606,10 +588,11 @@ There is currently no automated test suite. All testing is manual. Before any no
 - [ ] **Unknown theme name** — emits WARN, does not crash.
 - [ ] **Unknown indicator name** — emits WARN, falls back to blank.
 - [ ] **Large files** (1,000+ lines) — thousands separators appear in both the absolute and relative columns; gutter widens automatically at the 1k/10k/100k boundaries; column widths are identical in both the real-line and wrapped-line code paths; no performance degradation at 10,000+ lines.
-- [ ] **Missing statuscol.nvim** — emits WARN, does not crash NeoVim.
-- [ ] **Plugin buffers** (file tree, dashboard, picker) — no custom statuscolumn applied.
-- [ ] **statuscol passthrough** — `segments_before` / `segments_after` appear in the correct order around the line-justice segment; gitsigns signs render correctly.
-- [ ] **`statuscol.options`** — extra top-level keys are forwarded; `relculright`, `bt_ignore`, `segments` are silently ignored.
+- [ ] **Segment before setup()** — renders a blank gutter; emits exactly one ERROR notification regardless of how many lines are rendered; no spam.
+- [ ] **Re-setup()** — calling `setup()` a second time (e.g. to switch theme) takes effect immediately in the already-wired statuscol; no re-wiring required; no duplicate ColorScheme autocmds.
+- [ ] **Segment captured before setup()** — statuscol wired with `lj.segment` before `lj.setup()` is called; after `setup()` runs, rendering works correctly.
+- [ ] **Plugin buffers** (file tree, dashboard, picker) — no custom statuscolumn applied (controlled by statuscol's `bt_ignore` / `ft_ignore` in the user's statuscol config).
+- [ ] **Multiple plugins in statuscolumn** — gitsigns sign column, line-justice numbers, fold column all coexist correctly when wired via the user's statuscol config.
 - [ ] **Multiple `setup()` calls** — no duplicate autocmds, no crash.
 - [ ] **Cross-platform** — Linux, macOS, Windows (WSL).
 
@@ -620,13 +603,15 @@ There is currently no automated test suite. All testing is manual. Before any no
 | Symptom | Likely Cause | Fix |
 |---|---|---|
 | No dual line numbers visible | `statuscol.nvim` not installed | Install `luukvbaal/statuscol.nvim` |
-| Line numbers appear in plugin windows (file tree, etc.) | `bt_ignore` not working | Verify buffer has `buftype=nofile`; check `INTERNAL.bt_ignore` |
+| Blank gutter + ERROR in messages | `lj.segment` used in statuscol before `lj.setup()` was called | Call `lj.setup()` before `statuscol.setup()` |
+| Re-`setup()` not taking effect | Not possible with current architecture — `_state` is mutated in place | Verify `setup()` is completing without errors |
 | Colours wrong after colorscheme change | `ColorScheme` autocmd not firing | Check augroup `LineJusticeColorScheme` exists; ensure `setup()` was called |
 | Thousands separator misaligned | `col_w` formula bug | Both real-line and wrap-line paths use the same formula — keep them in sync |
 | Wrapped indicator not centred | `centre()` helper receiving wrong width | Verify `gutter_w = col_w + 1 + col_w` in both branches |
 | `Unknown theme` warning | Typo in `theme` string | Check `themes.list()` for valid names (case-sensitive); ensure custom themes are registered before `setup()` |
 | `Unknown indicator` warning | Typo in `indicator` string | Check `WRAPPED_INDICATORS` keys (case-sensitive) |
 | Duplicate `ColorScheme` autocmds | `setup()` called multiple times | Already handled — augroup created with `{ clear = true }` |
+| Conflict with existing statuscol config | Line-justice calling `statuscol.setup()` | This should never happen — line-justice never calls `statuscol.setup()`. If it does, file a bug. |
 
 ---
 
@@ -649,7 +634,7 @@ There is currently no automated test suite. All testing is manual. Before any no
 
 | Dependency | Repo | Notes |
 |---|---|---|
-| `statuscol.nvim` | `luukvbaal/statuscol.nvim` | Handles all statuscolumn rendering. Without it, the plugin emits a WARN and does nothing. |
+| `statuscol.nvim` | `luukvbaal/statuscol.nvim` | Handles all statuscolumn rendering. line-justice provides the segment; the user wires it into statuscol. |
 
 ### Optional / future
 
