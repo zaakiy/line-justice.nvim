@@ -53,11 +53,10 @@ line-justice is a **statuscol.nvim segment provider**. It owns:
 - Colour themes and highlight group registration
 - Dual abs/rel number formatting and rendering
 - Soft-wrapped continuation-line indicators
-- The `statuscol.setup()` call — wired internally so you never have to
 
-`setup()` automatically calls `statuscol.setup()` with the line-justice segment and `bt_ignore = { "nofile" }`, so the custom statuscolumn is **never applied to non-file buffers** (quickfix, terminal, prompt, etc.). Additional statuscol options — extra segments, `ft_ignore`, `relculright` — are configurable via the `statuscol` key in your `lj.setup()` call.
+It does **not** call `statuscol.setup()`. You wire `require("line-justice").segment` into your own statuscol config. This means line-justice never conflicts with your statuscol configuration — you remain in full control of what else appears in the statuscolumn.
 
-`setup()` also sets `vim.o.number = true` and `vim.o.relativenumber = true`. Both are required for statuscol to populate `args.lnum` and `args.relnum` correctly.
+`setup()` automatically sets `vim.o.number = true` and `vim.o.relativenumber = true`. Both are required for statuscol to populate `args.lnum` and `args.relnum` correctly.
 
 ---
 
@@ -71,8 +70,14 @@ line-justice is a **statuscol.nvim segment provider**. It owns:
   dependencies = { "luukvbaal/statuscol.nvim" },
   lazy = false,
   config = function()
-    require("line-justice").setup()
-    -- No statuscol.setup() needed — line-justice calls it internally.
+    local lj = require("line-justice")
+    lj.setup()
+
+    require("statuscol").setup({
+      segments = {
+        { text = { lj.segment }, click = "v:lua.ScLa" },
+      },
+    })
   end,
 }
 ```
@@ -86,8 +91,14 @@ use {
   "zaakiy/line-justice.nvim",
   requires = { "luukvbaal/statuscol.nvim" },
   config = function()
-    require("line-justice").setup()
-    -- No statuscol.setup() needed — line-justice calls it internally.
+    local lj = require("line-justice")
+    lj.setup()
+
+    require("statuscol").setup({
+      segments = {
+        { text = { lj.segment }, click = "v:lua.ScLa" },
+      },
+    })
   end,
 }
 ```
@@ -97,8 +108,14 @@ use {
 Clone both `luukvbaal/statuscol.nvim` and `zaakiy/line-justice.nvim`, add them to your `runtimepath`, then in your `init.lua`:
 
 ```lua
-require("line-justice").setup()
--- No statuscol.setup() needed — line-justice calls it internally.
+local lj = require("line-justice")
+lj.setup()
+
+require("statuscol").setup({
+  segments = {
+    { text = { lj.segment }, click = "v:lua.ScLa" },
+  },
+})
 ```
 
 ---
@@ -107,10 +124,10 @@ require("line-justice").setup()
 
 Call `require("line-justice").setup(opts)` with any options you want to override. All keys are optional — omitting them uses the defaults shown below.
 
-`setup()` calls `statuscol.setup()` internally. You do **not** need a separate `statuscol.setup()` call.
-
 ```lua
-require("line-justice").setup({
+local lj = require("line-justice")
+
+lj.setup({
 
   line_numbers = {
 
@@ -157,39 +174,13 @@ require("line-justice").setup({
 
   },
 
-  statuscol = {
+})
 
-    -- bt_ignore (table)
-    --   Buftypes excluded from the custom statuscolumn.
-    --   "nofile" is ALWAYS included — you cannot remove it.
-    --   Default: { "nofile" }
-    -- bt_ignore = { "nofile", "terminal" },
-
-    -- ft_ignore (table)
-    --   Filetypes excluded from the custom statuscolumn.
-    --   Default: {}
-    -- ft_ignore = { "NvimTree", "neo-tree", "alpha" },
-
-    -- relculright (boolean)
-    --   Right-align relative line numbers. Default: false.
-    -- relculright = true,
-
-    -- left_segments (table)
-    --   statuscol segment tables placed to the LEFT of the line-justice
-    --   number segment. E.g. a sign column for gitsigns:
-    -- left_segments = {
-    --   { text = { "%s" }, click = "v:lua.ScSa" },
-    -- },
-
-    -- right_segments (table)
-    --   statuscol segment tables placed to the RIGHT of the line-justice
-    --   number segment. E.g. a fold column:
-    -- right_segments = {
-    --   { text = { "%C" }, click = "v:lua.ScFa" },
-    -- },
-
+-- Wire the segment into statuscol after setup()
+require("statuscol").setup({
+  segments = {
+    { text = { lj.segment }, click = "v:lua.ScLa" },
   },
-
 })
 ```
 
@@ -197,7 +188,7 @@ require("line-justice").setup({
 
 ## Other Plugins in the Statuscolumn
 
-line-justice calls `statuscol.setup()` internally, so you control what else appears in the statuscolumn via the `statuscol` key in `lj.setup()`. Use `left_segments` and `right_segments` to place other segments around the line-justice numbers.
+Because line-justice never calls `statuscol.setup()`, you have complete freedom over what else appears in the statuscolumn. Place other segments around `lj.segment` in your statuscol config.
 
 ### gitsigns sign column
 
@@ -208,12 +199,11 @@ require("gitsigns").setup({
   signcolumn = true,
 })
 
--- Sign column to the LEFT of line-justice numbers:
-require("line-justice").setup({
-  statuscol = {
-    left_segments = {
-      { text = { "%s" }, click = "v:lua.ScSa" }, -- sign column
-    },
+-- In your statuscol setup — sign column to the LEFT of line-justice:
+require("statuscol").setup({
+  segments = {
+    { text = { "%s" },        click = "v:lua.ScSa" }, -- sign column
+    { text = { lj.segment },  click = "v:lua.ScLa" }, -- line-justice
   },
 })
 ```
@@ -221,25 +211,25 @@ require("line-justice").setup({
 ### Fold column
 
 ```lua
--- Fold column to the RIGHT of line-justice numbers:
-require("line-justice").setup({
-  statuscol = {
-    right_segments = {
-      { text = { "%C" }, click = "v:lua.ScFa" }, -- fold column
-    },
+require("statuscol").setup({
+  segments = {
+    { text = { lj.segment }, click = "v:lua.ScLa" }, -- line-justice
+    { text = { "%C" },        click = "v:lua.ScFa" }, -- fold column
   },
 })
 ```
 
-### Excluding filetypes and buftypes
+### statuscol top-level options
 
-`bt_ignore = { "nofile" }` is always active. Append extra entries to exclude more buffer types, or use `ft_ignore` for filetype-based exclusions:
+Any `statuscol.setup()` key (`relculright`, `bt_ignore`, `ft_ignore`, etc.) can be passed freely alongside the segments:
 
 ```lua
-require("line-justice").setup({
-  statuscol = {
-    bt_ignore = { "nofile", "terminal" },
-    ft_ignore = { "NvimTree", "neo-tree", "alpha" },
+require("statuscol").setup({
+  relculright = true,
+  bt_ignore   = { "nofile" },
+  ft_ignore   = { "NvimTree", "neo-tree" },
+  segments    = {
+    { text = { lj.segment }, click = "v:lua.ScLa" },
   },
 })
 ```
@@ -335,8 +325,12 @@ lj.setup({
   line_numbers = { theme = "Forest" },
 })
 
--- 3. setup() wires statuscol automatically — no extra call needed.
-lj.setup({ line_numbers = { theme = "Forest" } })
+-- 3. Wire the segment
+require("statuscol").setup({
+  segments = {
+    { text = { lj.segment }, click = "v:lua.ScLa" },
+  },
+})
 ```
 
 ### Color slots
@@ -388,19 +382,24 @@ See [`examples/custom-theme.lua`](examples/custom-theme.lua) for three fully-ann
 ### Minimal — just the defaults
 
 ```lua
-require("line-justice").setup()
+local lj = require("line-justice")
+lj.setup()
+
+require("statuscol").setup({
+  segments = { { text = { lj.segment }, click = "v:lua.ScLa" } },
+})
 ```
 
 ### Arrow indicator on wrapped lines
 
 ```lua
-require("line-justice").setup({ wrapped_lines = { indicator = "Arrow" } })  -- ↳
+lj.setup({ wrapped_lines = { indicator = "Arrow" } })  -- ↳
 ```
 
 ### Custom indicator
 
 ```lua
-require("line-justice").setup({
+lj.setup({
   wrapped_lines = { indicator = "Custom", custom = "⤷" },
 })
 ```
@@ -408,7 +407,7 @@ require("line-justice").setup({
 ### Custom indicator with a custom colour
 
 ```lua
-require("line-justice").setup({
+lj.setup({
   line_numbers = {
     theme = "Horizon",
     overrides = {
@@ -422,7 +421,7 @@ require("line-justice").setup({
 ### Auto-detect colours from colorscheme
 
 ```lua
-require("line-justice").setup({
+lj.setup({
   line_numbers  = { theme = nil },
   wrapped_lines = { indicator = "Arrow" },
 })
@@ -433,7 +432,7 @@ require("line-justice").setup({
 Keep all of Horizon's colours but swap the cursor line to a warm orange:
 
 ```lua
-require("line-justice").setup({
+lj.setup({
   line_numbers = {
     theme = "Horizon",
     overrides = {
@@ -443,21 +442,10 @@ require("line-justice").setup({
 })
 ```
 
-### gitsigns + fold column alongside line-justice
-
-```lua
-require("line-justice").setup({
-  statuscol = {
-    left_segments  = { { text = { "%s" }, click = "v:lua.ScSa" } }, -- signs
-    right_segments = { { text = { "%C" }, click = "v:lua.ScFa" } }, -- folds
-  },
-})
-```
-
 ### Fully manual — take complete control
 
 ```lua
-require("line-justice").setup({
+lj.setup({
   line_numbers = {
     theme = nil,
     overrides = {
@@ -470,10 +458,6 @@ require("line-justice").setup({
     },
   },
   wrapped_lines = { indicator = "Custom", custom = "╰" },
-  statuscol = {
-    bt_ignore = { "nofile", "terminal" },
-    ft_ignore = { "NvimTree" },
-  },
 })
 ```
 
@@ -519,14 +503,13 @@ Both the absolute and relative columns always share the same width, so the gutte
 
 ### Responsibility boundary
 
-| Owned by line-justice | Configurable via `statuscol` opts |
+| Owned by line-justice | Owned by you (via statuscol) |
 |---|---|
-| Highlight group registration | `left_segments` / `right_segments` (extra segments) |
-| Colour theme resolution | `bt_ignore` (buftype exclusions — "nofile" always set) |
-| Number formatting and rendering | `ft_ignore` (filetype exclusions) |
-| Wrapped-line indicator | `relculright` (relative number alignment) |
-| `vim.o.number` / `vim.o.relativenumber` | |
-| `statuscol.setup()` call | |
+| Highlight group registration | `statuscol.setup()` call |
+| Colour theme resolution | Segment placement and ordering |
+| Number formatting and rendering | Other segments (signs, folds, etc.) |
+| Wrapped-line indicator | `relculright`, `bt_ignore`, `ft_ignore`, … |
+| `vim.o.number` / `vim.o.relativenumber` | Everything else |
 
 ## License
 
