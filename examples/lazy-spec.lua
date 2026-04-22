@@ -2,6 +2,29 @@
 -- ~/.config/nvim/lua/plugins/line-justice.lua
 --
 -- ─────────────────────────────────────────────────────────────────────────────
+-- HOW IT WORKS
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- line-justice is a statuscol.nvim segment provider. It owns colour themes,
+-- highlight group registration, number formatting, and wrapped-line rendering.
+-- It does NOT call statuscol.setup() — you wire the segment into your own
+-- statuscol config. This means it never conflicts with your statuscol setup.
+--
+-- Minimal wiring:
+--
+--   local lj = require("line-justice")
+--   lj.setup()
+--
+--   require("statuscol").setup({
+--     segments = {
+--       { text = { lj.segment }, click = "v:lua.ScLa" },
+--     },
+--   })
+--
+-- setup() automatically enables vim.o.number and vim.o.relativenumber — both
+-- are required for statuscol to populate args.lnum and args.relnum correctly.
+--
+-- ─────────────────────────────────────────────────────────────────────────────
 -- WRAPPED-LINE INDICATOR
 -- ─────────────────────────────────────────────────────────────────────────────
 --
@@ -11,12 +34,12 @@
 -- from real lines.
 --
 -- wrapped_lines.indicator  (string)
---   "None"     — blank gutter, no character shown (default)
+--   "None"     — blank gutter, no character shown
 --   "Arrow"    — ↳  classic turn-down arrow
 --   "Chevron"  — ›  single right-pointing chevron
 --   "Dot"      — ·  middle dot / interpunct
 --   "Ellipsis" — …  horizontal ellipsis
---   "Bar"      — │  thin vertical bar
+--   "Bar"      — │  thin vertical bar (default)
 --   "Custom"   — use whatever you set in wrapped_lines.custom
 --
 -- wrapped_lines.custom  (string)
@@ -24,32 +47,13 @@
 --   Examples: "»", "⤷", "▸", "→", "╰"
 --
 -- ─────────────────────────────────────────────────────────────────────────────
--- STATUSCOL PASSTHROUGH
--- ─────────────────────────────────────────────────────────────────────────────
---
--- line-justice owns exactly one statuscol segment (the dual line-number
--- renderer). The statuscol passthrough lets you add extra segments around it
--- so that other plugins — most commonly gitsigns — can coexist in the same
--- statuscolumn without you having to configure statuscol.nvim directly.
---
--- statuscol.segments_before  (table[])
---   statuscol segments inserted to the LEFT of the line-justice segment.
---   Typical use: gitsigns sign column, diagnostic signs.
---
--- statuscol.segments_after  (table[])
---   statuscol segments inserted to the RIGHT of the line-justice segment.
---
--- statuscol.options  (table)
---   Extra top-level keys merged into statuscol.setup().
---   The keys relculright, bt_ignore, and segments are always controlled by
---   line-justice and will be silently ignored if provided here.
---
--- ─────────────────────────────────────────────────────────────────────────────
 -- COLOUR THEMES
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- line_numbers.theme     (string | nil)
 --   "Horizon" — built-in palette: cool blues above, greens below (default)
+--   "Dawn"    — warm amber and rose tones
+--   "Midnight"— cool monochrome blue-greys
 --   nil       — auto-detect from your active colorscheme
 --
 -- line_numbers.overrides (table | nil)
@@ -59,115 +63,120 @@
 --
 -- ─────────────────────────────────────────────────────────────────────────────
 
-return {
-  "zaakiy/line-justice.nvim",
-  dependencies = { "luukvbaal/statuscol.nvim" },
-  lazy = false,
+-- ── line-justice spec ─────────────────────────────────────────────────────────
+--
+-- lazy = false ensures setup() runs at startup so M.segment is populated
+-- before statuscol.setup() reads it.
 
-  -- ── Option A: defaults — Horizon theme, no wrapped indicator ──────────────
-  opts = {
-    line_numbers  = { theme = "Horizon" },
-    wrapped_lines = { indicator = "Bar" },
+return {
+  {
+    "zaakiy/line-justice.nvim",
+    dependencies = { "luukvbaal/statuscol.nvim" },
+    lazy = false,
+
+    -- ── Option A: defaults — Horizon theme, Bar wrapped indicator ─────────────
+    opts = {
+      line_numbers  = { theme = "Horizon" },
+      wrapped_lines = { indicator = "Bar" },
+    },
+
+    config = function(_, opts)
+      local lj = require("line-justice")
+      lj.setup(opts)
+
+      -- Wire the segment into statuscol. Place other segments around it freely.
+      require("statuscol").setup({
+        segments = {
+          { text = { lj.segment }, click = "v:lua.ScLa" },
+        },
+      })
+    end,
+
+    -- ── Option B: Arrow indicator (↳) ─────────────────────────────────────────
+    -- opts = {
+    --   line_numbers  = { theme = "Horizon" },
+    --   wrapped_lines = { indicator = "Arrow" },  -- ↳
+    -- },
+
+    -- ── Option C: Chevron indicator (›) ───────────────────────────────────────
+    -- opts = {
+    --   line_numbers  = { theme = "Horizon" },
+    --   wrapped_lines = { indicator = "Chevron" }, -- ›
+    -- },
+
+    -- ── Option D: Dot indicator (·) ───────────────────────────────────────────
+    -- opts = {
+    --   line_numbers  = { theme = "Horizon" },
+    --   wrapped_lines = { indicator = "Dot" },     -- ·
+    -- },
+
+    -- ── Option E: Ellipsis indicator (…) ──────────────────────────────────────
+    -- opts = {
+    --   line_numbers  = { theme = "Horizon" },
+    --   wrapped_lines = { indicator = "Ellipsis" }, -- …
+    -- },
+
+    -- ── Option F: Custom indicator ────────────────────────────────────────────
+    -- opts = {
+    --   line_numbers  = { theme = "Horizon" },
+    --   wrapped_lines = { indicator = "Custom", custom = "⤷" },
+    -- },
+
+    -- ── Option G: auto-detect colours ─────────────────────────────────────────
+    -- opts = {
+    --   line_numbers  = { theme = nil },           -- derive from colorscheme
+    --   wrapped_lines = { indicator = "Arrow" },
+    -- },
+
+    -- ── Option H: full line-justice config ────────────────────────────────────
+    -- opts = {
+    --   line_numbers = {
+    --     theme = "Horizon",
+    --     overrides = {
+    --       CursorLine    = { fg = "#ff9e64", bold = true },
+    --       AbsoluteAbove = { fg = "#565f89" },
+    --       AbsoluteBelow = { fg = "#41664f" },
+    --       RelativeAbove = { fg = "#7b9ac7" },
+    --       RelativeBelow = { fg = "#6aa781" },
+    --       WrappedLine   = { fg = "#565f89", italic = true },
+    --     },
+    --   },
+    --   wrapped_lines = { indicator = "Custom", custom = "╰" },
+    -- },
   },
 
-  config = function(_, opts)
-    -- Place any additional setup logic here, or just pass opts straight through.
-    require("line-justice").setup(opts)
-  end,
-
-  -- ── Option B: Arrow indicator (↳) ─────────────────────────────────────────
-  -- opts = {
-  --   line_numbers  = { theme = "Horizon" },
-  --   wrapped_lines = { indicator = "Arrow" },  -- ↳
-  -- },
-
-  -- ── Option C: Chevron indicator (›) ───────────────────────────────────────
-  -- opts = {
-  --   line_numbers  = { theme = "Horizon" },
-  --   wrapped_lines = { indicator = "Chevron" }, -- ›
-  -- },
-
-  -- ── Option D: Dot indicator (·) ───────────────────────────────────────────
-  -- opts = {
-  --   line_numbers  = { theme = "Horizon" },
-  --   wrapped_lines = { indicator = "Dot" },     -- ·
-  -- },
-
-  -- ── Option E: Ellipsis indicator (…) ──────────────────────────────────────
-  -- opts = {
-  --   line_numbers  = { theme = "Horizon" },
-  --   wrapped_lines = { indicator = "Ellipsis" }, -- …
-  -- },
-
-  -- ── Option F: Bar indicator (│) ───────────────────────────────────────────
-  -- opts = {
-  --   line_numbers  = { theme = "Horizon" },
-  --   wrapped_lines = { indicator = "Bar" },     -- │
-  -- },
-
-  -- ── Option G: Custom indicator ────────────────────────────────────────────
-  -- Use any character you like. Some ideas: "»" "⤷" "▸" "→" "╰"
-  -- opts = {
-  --   line_numbers  = { theme = "Horizon" },
-  --   wrapped_lines = {
-  --     indicator = "Custom",
-  --     custom    = "⤷",
-  --   },
-  -- },
-
-  -- ── Option H: auto-detect colours + custom indicator ──────────────────────
-  -- opts = {
-  --   line_numbers  = { theme = nil },           -- derive from colorscheme
-  --   wrapped_lines = { indicator = "Arrow" },
-  -- },
-
-  -- ── Option I: full control ────────────────────────────────────────────────
-  -- opts = {
-  --   line_numbers = {
-  --     theme = "Horizon",
-  --     overrides = {
-  --       CursorLine    = { fg = "#ff9e64", bold = true },
-  --       AbsoluteAbove = { fg = "#565f89" },
-  --       AbsoluteBelow = { fg = "#41664f" },
-  --       RelativeAbove = { fg = "#7b9ac7" },
-  --       RelativeBelow = { fg = "#6aa781" },
-  --       WrappedLine   = { fg = "#565f89", italic = true },
-  --     },
-  --   },
-  --   wrapped_lines = {
-  --     indicator = "Custom",
-  --     custom    = "╰",
-  --   },
-  -- },
-
-  -- ── Option J: gitsigns sign column on the left ────────────────────────────
-  -- Requires gitsigns.nvim. Enable numhl in gitsigns and add its sign column
-  -- as a segment_before so it sits to the left of the line-justice numbers.
+  -- ── Placing other segments alongside line-justice ─────────────────────────
   --
-  -- In your gitsigns setup:
-  --   require("gitsigns").setup({ numhl = true, signcolumn = true })
+  -- Because line-justice doesn't own statuscol.setup(), you have full control
+  -- over what else appears in the statuscolumn. Common examples:
   --
-  -- opts = {
-  --   line_numbers  = { theme = "Horizon" },
-  --   wrapped_lines = { indicator = "Bar" },
-  --   statuscol = {
-  --     segments_before = {
-  --       -- "%s" renders the sign column; ScSa is the click handler
-  --       { text = { "%s" }, click = "v:lua.ScSa" },
-  --     },
-  --   },
-  -- },
-
-  -- ── Option K: extra statuscol top-level options ───────────────────────────
-  -- Pass any statuscol.setup() key that line-justice does not manage.
-  -- (relculright, bt_ignore, and segments are always owned by line-justice.)
+  -- Gitsigns sign column to the LEFT of line-justice numbers:
   --
-  -- opts = {
-  --   line_numbers  = { theme = "Horizon" },
-  --   statuscol = {
-  --     options = {
-  --       ft_ignore = { "NvimTree", "neo-tree" },
+  --   require("statuscol").setup({
+  --     segments = {
+  --       { text = { "%s" },         click = "v:lua.ScSa" }, -- sign column
+  --       { text = { lj.segment },   click = "v:lua.ScLa" }, -- line-justice
   --     },
-  --   },
-  -- },
+  --   })
+  --
+  -- Fold column to the RIGHT of line-justice numbers:
+  --
+  --   require("statuscol").setup({
+  --     segments = {
+  --       { text = { lj.segment },   click = "v:lua.ScLa" }, -- line-justice
+  --       { text = { "%C" },         click = "v:lua.ScFa" }, -- fold column
+  --     },
+  --   })
+  --
+  -- Any statuscol top-level option (relculright, bt_ignore, ft_ignore, etc.)
+  -- can be passed freely — line-justice does not touch them:
+  --
+  --   require("statuscol").setup({
+  --     relculright = true,
+  --     bt_ignore   = { "nofile" },
+  --     ft_ignore   = { "NvimTree", "neo-tree" },
+  --     segments    = {
+  --       { text = { lj.segment }, click = "v:lua.ScLa" },
+  --     },
+  --   })
 }

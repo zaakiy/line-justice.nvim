@@ -44,49 +44,79 @@ When you need to jump, you use the relative number. When you reference, you use 
 ## Requirements
 
 - **NeoVim 0.10+**
-- **[luukvbaal/statuscol.nvim](https://github.com/luukvbaal/statuscol.nvim)** (required — handles the statuscolumn rendering)
+- **[luukvbaal/statuscol.nvim](https://github.com/luukvbaal/statuscol.nvim)** (required — handles statuscolumn rendering)
+
+## How It Works
+
+line-justice is a **statuscol.nvim segment provider**. It owns:
+
+- Colour themes and highlight group registration
+- Dual abs/rel number formatting and rendering
+- Soft-wrapped continuation-line indicators
+
+It does **not** call `statuscol.setup()`. You wire `require("line-justice").segment` into your own statuscol config. This means line-justice never conflicts with your statuscol configuration — you remain in full control of what else appears in the statuscolumn.
+
+`setup()` automatically sets `vim.o.number = true` and `vim.o.relativenumber = true`. Both are required for statuscol to populate `args.lnum` and `args.relnum` correctly.
+
+---
 
 ## Installation
 
 ### [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
--- return    -- add if you don't already have it
 {
   "zaakiy/line-justice.nvim",
   dependencies = { "luukvbaal/statuscol.nvim" },
   lazy = false,
-  opts = {
-    line_numbers  = { theme = "Horizon" },
-    wrapped_lines = { indicator = "None" },
-  },
-  config = function(_, opts)
-    require("line-justice").setup(opts)
+  config = function()
+    local lj = require("line-justice")
+    lj.setup()
+
+    require("statuscol").setup({
+      segments = {
+        { text = { lj.segment }, click = "v:lua.ScLa" },
+      },
+    })
   end,
 }
 ```
 
 ### [packer.nvim](https://github.com/wbthomason/packer.nvim)
 
-NOTE: Packer is untested. Looking for packer users to contribute any corrections.
+> **Note:** Packer is untested. Looking for packer users to contribute any corrections.
 
 ```lua
 use {
   "zaakiy/line-justice.nvim",
   requires = { "luukvbaal/statuscol.nvim" },
-  opts = {
-    line_numbers  = { theme = "Horizon" },
-    wrapped_lines = { indicator = "None" },
-  },
   config = function()
-    require("line-justice").setup(opts)
+    local lj = require("line-justice")
+    lj.setup()
+
+    require("statuscol").setup({
+      segments = {
+        { text = { lj.segment }, click = "v:lua.ScLa" },
+      },
+    })
   end,
 }
 ```
 
 ### Manual (no plugin manager)
 
-Clone both `luukvbaal/statuscol.nvim` and `zaakiy/line-justice.nvim`, add them to your `runtimepath`, then call `require("line-justice").setup({})` in your `init.lua`.
+Clone both `luukvbaal/statuscol.nvim` and `zaakiy/line-justice.nvim`, add them to your `runtimepath`, then in your `init.lua`:
+
+```lua
+local lj = require("line-justice")
+lj.setup()
+
+require("statuscol").setup({
+  segments = {
+    { text = { lj.segment }, click = "v:lua.ScLa" },
+  },
+})
+```
 
 ---
 
@@ -95,7 +125,9 @@ Clone both `luukvbaal/statuscol.nvim` and `zaakiy/line-justice.nvim`, add them t
 Call `require("line-justice").setup(opts)` with any options you want to override. All keys are optional — omitting them uses the defaults shown below.
 
 ```lua
-opts = {
+local lj = require("line-justice")
+
+lj.setup({
 
   line_numbers = {
 
@@ -123,8 +155,7 @@ opts = {
 
     -- indicator (string)
     --   Named indicator preset shown in the gutter of soft-wrapped
-    --   continuation lines, centred in the gutter width.
-    --   Default: "None" (blank — no character shown).
+    --   continuation lines, centred in the gutter width. Default: "Bar".
     --
     --   "None"     — blank gutter
     --   "Arrow"    — ↳
@@ -133,7 +164,7 @@ opts = {
     --   "Ellipsis" — …
     --   "Bar"      — │
     --   "Custom"   — use the string in wrapped_lines.custom
-    indicator = "None",
+    indicator = "Bar",
 
     -- custom (string)
     --   Only used when indicator = "Custom".
@@ -143,7 +174,64 @@ opts = {
 
   },
 
-},    -- the comma may not be needed, depending on your situation
+})
+
+-- Wire the segment into statuscol after setup()
+require("statuscol").setup({
+  segments = {
+    { text = { lj.segment }, click = "v:lua.ScLa" },
+  },
+})
+```
+
+---
+
+## Other Plugins in the Statuscolumn
+
+Because line-justice never calls `statuscol.setup()`, you have complete freedom over what else appears in the statuscolumn. Place other segments around `lj.segment` in your statuscol config.
+
+### gitsigns sign column
+
+```lua
+-- In your gitsigns setup:
+require("gitsigns").setup({
+  numhl      = true,
+  signcolumn = true,
+})
+
+-- In your statuscol setup — sign column to the LEFT of line-justice:
+require("statuscol").setup({
+  segments = {
+    { text = { "%s" },        click = "v:lua.ScSa" }, -- sign column
+    { text = { lj.segment },  click = "v:lua.ScLa" }, -- line-justice
+  },
+})
+```
+
+### Fold column
+
+```lua
+require("statuscol").setup({
+  segments = {
+    { text = { lj.segment }, click = "v:lua.ScLa" }, -- line-justice
+    { text = { "%C" },        click = "v:lua.ScFa" }, -- fold column
+  },
+})
+```
+
+### statuscol top-level options
+
+Any `statuscol.setup()` key (`relculright`, `bt_ignore`, `ft_ignore`, etc.) can be passed freely alongside the segments:
+
+```lua
+require("statuscol").setup({
+  relculright = true,
+  bt_ignore   = { "nofile" },
+  ft_ignore   = { "NvimTree", "neo-tree" },
+  segments    = {
+    { text = { lj.segment }, click = "v:lua.ScLa" },
+  },
+})
 ```
 
 ---
@@ -156,12 +244,12 @@ When a line is too long for the window and wraps, NeoVim renders the continuatio
 
 | Name | Character | Description |
 |---|---|---|
-| `"None"` | _(blank)_ | No character — gutter is fully empty **(default)** |
+| `"None"` | _(blank)_ | No character — gutter is fully empty |
 | `"Arrow"` | ↳ | Classic turn-down arrow — "continued from above" |
 | `"Chevron"` | › | Single right-pointing chevron — lightweight directional hint |
 | `"Dot"` | · | Middle dot / interpunct — subtle and minimal |
 | `"Ellipsis"` | … | Horizontal ellipsis — "more content continues" |
-| `"Bar"` | │ | Thin vertical bar — structural / tree-style |
+| `"Bar"` | │ | Thin vertical bar — structural / tree-style **(default)** |
 | `"Custom"` | _your string_ | Whatever you put in `wrapped_lines.custom` |
 
 ### Custom indicator
@@ -190,58 +278,6 @@ line_numbers = {
 
 ---
 
-## statuscol Passthrough
-
-line-justice owns exactly one statuscol segment — the dual line-number renderer. The `statuscol` passthrough lets you place additional statuscol segments **before** or **after** that segment, so other plugins (most commonly **gitsigns**) can coexist in the same statuscolumn without you having to configure `statuscol.nvim` directly.
-
-### gitsigns integration
-
-Enable `numhl` and `signcolumn` in gitsigns, then add its sign column as a `segments_before` entry so it sits to the **left** of the line-justice numbers:
-
-```lua
--- In your gitsigns setup:
-require("gitsigns").setup({
-  numhl      = true,
-  signcolumn = true,
-})
-
--- In your line-justice setup:
-require("line-justice").setup({
-  line_numbers  = { theme = "Horizon" },
-  wrapped_lines = { indicator = "Bar" },
-  statuscol = {
-    segments_before = {
-      -- "%s" renders the sign column; ScSa is the statuscol click handler
-      { text = { "%s" }, click = "v:lua.ScSa" },
-    },
-  },
-})
-```
-
-To place a segment to the **right** of the line-justice numbers instead, use `segments_after`:
-
-```lua
-statuscol = {
-  segments_after = {
-    { text = { "%s" }, click = "v:lua.ScSa" },
-  },
-},
-```
-
-### Extra statuscol top-level options
-
-Pass any `statuscol.setup()` key that line-justice does not manage via `statuscol.options`. The keys `relculright`, `bt_ignore`, and `segments` are always controlled by line-justice and will be silently ignored if provided here.
-
-```lua
-statuscol = {
-  options = {
-    ft_ignore = { "NvimTree", "neo-tree" },
-  },
-},
-```
-
----
-
 ## Built-in Themes
 
 Three colour themes ship out of the box:
@@ -253,11 +289,9 @@ Three colour themes ship out of the box:
 | `"Midnight"` | Cool monochrome blue-greys | GitHub Dark, Zephyr, Moonfly |
 
 ```lua
-require("line-justice").setup({
-  line_numbers = { theme = "Horizon" },   -- default
-  -- line_numbers = { theme = "Dawn" },
-  -- line_numbers = { theme = "Midnight" },
-})
+lj.setup({ line_numbers = { theme = "Horizon" } })   -- default
+-- lj.setup({ line_numbers = { theme = "Dawn" } })
+-- lj.setup({ line_numbers = { theme = "Midnight" } })
 ```
 
 Set `theme = nil` to auto-detect colours from your active colorscheme instead.
@@ -289,6 +323,13 @@ lj.themes.register({
 -- 2. Use it in setup
 lj.setup({
   line_numbers = { theme = "Forest" },
+})
+
+-- 3. Wire the segment
+require("statuscol").setup({
+  segments = {
+    { text = { lj.segment }, click = "v:lua.ScLa" },
+  },
 })
 ```
 
@@ -324,7 +365,7 @@ local ok, lj = pcall(require, "line-justice")
 if not ok then return end
 
 lj.themes.register({
-  name   = "MyTheme",
+  name        = "MyTheme",
   description = "My personal palette.",
   colors = { ... },
 })
@@ -338,64 +379,60 @@ See [`examples/custom-theme.lua`](examples/custom-theme.lua) for three fully-ann
 
 ## Examples
 
-### Just use the defaults
-Horizon theme, no wrapped indicator — no configuration required:
+### Minimal — just the defaults
+
 ```lua
-require("line-justice").setup()
+local lj = require("line-justice")
+lj.setup()
+
+require("statuscol").setup({
+  segments = { { text = { lj.segment }, click = "v:lua.ScLa" } },
+})
 ```
 
 ### Arrow indicator on wrapped lines
-```lua
-require("line-justice").setup({
-  wrapped_lines = { indicator = "Arrow" },  -- ↳
-})
-```
 
-### Chevron indicator
 ```lua
-require("line-justice").setup({
-  wrapped_lines = { indicator = "Chevron" },  -- ›
-})
+lj.setup({ wrapped_lines = { indicator = "Arrow" } })  -- ↳
 ```
 
 ### Custom indicator
+
 ```lua
-require("line-justice").setup({
-  wrapped_lines = {
-    indicator = "Custom",
-    custom    = "⤷",
-  },
+lj.setup({
+  wrapped_lines = { indicator = "Custom", custom = "⤷" },
 })
 ```
 
 ### Custom indicator with a custom colour
+
 ```lua
-require("line-justice").setup({
+lj.setup({
   line_numbers = {
     theme = "Horizon",
     overrides = {
       WrappedLine = { fg = "#ff9e64", italic = true },
     },
   },
-  wrapped_lines = {
-    indicator = "Custom",
-    custom    = "╰",
-  },
+  wrapped_lines = { indicator = "Custom", custom = "╰" },
 })
 ```
 
-### Auto-detect colours + Arrow indicator
+### Auto-detect colours from colorscheme
+
 ```lua
-require("line-justice").setup({
+lj.setup({
   line_numbers  = { theme = nil },
   wrapped_lines = { indicator = "Arrow" },
 })
 ```
 
 ### Override one colour on top of Horizon
+
 Keep all of Horizon's colours but swap the cursor line to a warm orange:
+
 ```lua
-require("line-justice").setup({
+lj.setup({
   line_numbers = {
     theme = "Horizon",
     overrides = {
@@ -405,23 +442,10 @@ require("line-justice").setup({
 })
 ```
 
-### Override several colours on top of Horizon
-```lua
-require("line-justice").setup({
-  line_numbers = {
-    theme = "Horizon",
-    overrides = {
-      CursorLine    = { fg = "#ff9e64", bold = true },
-      AbsoluteBelow = { fg = "#73daca" },
-      RelativeBelow = { fg = "#73daca" },
-    },
-  },
-})
-```
-
 ### Fully manual — take complete control
+
 ```lua
-require("line-justice").setup({
+lj.setup({
   line_numbers = {
     theme = nil,
     overrides = {
@@ -433,10 +457,7 @@ require("line-justice").setup({
       WrappedLine   = { fg = "#565f89", italic = true },
     },
   },
-  wrapped_lines = {
-    indicator = "Custom",
-    custom    = "╰",
-  },
+  wrapped_lines = { indicator = "Custom", custom = "╰" },
 })
 ```
 
@@ -465,15 +486,7 @@ And if you're pair programming on a file with comma-separated line numbers — w
 
 ---
 
-## How It Works
-
-LineJustice delegates all statuscolumn rendering to [`statuscol.nvim`](https://github.com/luukvbaal/statuscol.nvim). It registers a single custom segment that fires for every rendered line, outputting:
-
-- The **absolute** line number (right-aligned, with **thousands-separator commas** on large files)
-- A blank relative column on the cursor line, or the **relative** distance on all other lines
-- On soft-wrapped continuation lines: the configured indicator character, centred in the gutter width
-
-All columns are fixed-width and highlight-aware — colours change based on whether a line is above or below the cursor.
+## Architecture
 
 ### Column-width formula
 
@@ -487,6 +500,16 @@ gutter_w   = col_w + 1 + col_w              -- abs + space + rel
 ```
 
 Both the absolute and relative columns always share the same width, so the gutter is perfectly symmetric regardless of how large the file grows.
+
+### Responsibility boundary
+
+| Owned by line-justice | Owned by you (via statuscol) |
+|---|---|
+| Highlight group registration | `statuscol.setup()` call |
+| Colour theme resolution | Segment placement and ordering |
+| Number formatting and rendering | Other segments (signs, folds, etc.) |
+| Wrapped-line indicator | `relculright`, `bt_ignore`, `ft_ignore`, … |
+| `vim.o.number` / `vim.o.relativenumber` | Everything else |
 
 ## License
 

@@ -114,7 +114,7 @@ lj.themes.register({
 -- USING A CUSTOM THEME
 -- ─────────────────────────────────────────────────────────────────────────────
 --
--- After registering, pass the name to setup():
+-- After registering, pass the name to setup(), then wire the segment:
 
 lj.setup({
   line_numbers = {
@@ -122,6 +122,12 @@ lj.setup({
   },
   wrapped_lines = {
     indicator = "Arrow",      -- optional: show ↳ on wrapped lines
+  },
+})
+
+require("statuscol").setup({
+  segments = {
+    { text = { lj.segment }, click = "v:lua.ScLa" },
   },
 })
 
