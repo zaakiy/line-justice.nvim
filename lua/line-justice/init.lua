@@ -8,12 +8,25 @@
 --   • colour themes and highlight group registration
 --   • dual abs/rel number formatting and rendering
 --   • soft-wrapped continuation-line indicators
+--   • statuscol.setup() — called internally so you don't have to
 --
--- It does NOT call statuscol.setup(). You wire it in yourself:
+-- statuscol is always configured by line-justice. Sensible defaults are
+-- applied automatically, including bt_ignore = { "nofile" } so the plugin
+-- never activates in non-file buffers (quickfix, terminal, etc.).
 --
---   require("statuscol").setup({
---     segments = {
---       { text = { require("line-justice").segment }, click = "v:lua.ScLa" },
+-- You only need to call setup():
+--
+--   require("line-justice").setup()
+--
+-- Customise the statuscol integration via the `statuscol` key in opts:
+--
+--   require("line-justice").setup({
+--     statuscol = {
+--       bt_ignore  = { "nofile", "terminal" },  -- buftype blocklist
+--       ft_ignore  = { "NvimTree" },            -- filetype blocklist
+--       relculright = true,                     -- right-align relative nums
+--       left_segments  = {},                    -- segments prepended to lj
+--       right_segments = {},                    -- segments appended to lj
 --     },
 --   })
 --
@@ -28,6 +41,18 @@
 -- │                                    "Bar" — a line extending down to all  │
 -- │                                    overlapping lines)                    │
 -- │  wrapped_lines.custom     string   Character used when indicator="Custom"│
+-- │                                                                          │
+-- │  statuscol.bt_ignore      table    Buftype list excluded from the custom │
+-- │                                    statuscolumn. Always includes         │
+-- │                                    "nofile". Default: { "nofile" }       │
+-- │  statuscol.ft_ignore      table    Filetype list excluded from the       │
+-- │                                    custom statuscolumn. Default: {}      │
+-- │  statuscol.relculright    bool     Right-align relative line numbers.    │
+-- │                                    Default: false                        │
+-- │  statuscol.left_segments  table    statuscol segment tables placed to    │
+-- │                                    the LEFT of the line-justice numbers  │
+-- │  statuscol.right_segments table    statuscol segment tables placed to    │
+-- │                                    the RIGHT of the line-justice numbers │
 -- │                                                                          │
 -- │  Colour resolution priority (highest → lowest):                         │
 -- │    1. line_numbers.overrides  (your per-key tweaks)                     │
@@ -97,12 +122,39 @@
 ---                          indicator = "Custom". Ignored for all other presets.
 ---                          Examples: "»", "⤷", "▸", "→", "╰"
 
+---statuscol.nvim integration settings.
+---
+--- line-justice always calls statuscol.setup() internally. These options let
+--- you control which buffers/filetypes are excluded and what additional
+--- segments (gitsigns, fold column, etc.) appear alongside the line-justice
+--- numbers.
+---
+--- bt_ignore ALWAYS contains "nofile". Any extra entries you supply are merged
+--- in — you can never accidentally remove "nofile".
+---
+---@class LineJusticeStatuscol
+---@field bt_ignore?      string[]  Buftype blocklist for the custom statuscolumn.
+---                                 "nofile" is always included.
+---                                 Default: { "nofile" }
+---@field ft_ignore?      string[]  Filetype blocklist for the custom statuscolumn.
+---                                 Default: {}
+---@field relculright?    boolean   Right-align relative line numbers.
+---                                 Default: false
+---@field left_segments?  table[]   statuscol segment tables placed to the LEFT
+---                                 of the line-justice number segment.
+---                                 Each entry is a valid statuscol segment table,
+---                                 e.g. { text = { "%s" }, click = "v:lua.ScSa" }
+---@field right_segments? table[]   statuscol segment tables placed to the RIGHT
+---                                 of the line-justice number segment.
+---                                 E.g. { text = { "%C" }, click = "v:lua.ScFa" }
+
 ---Top-level configuration table passed to setup().
 ---All keys are optional — omitting them uses the defaults shown below.
 ---
 ---@class LineJusticeConfig
 ---@field line_numbers?  LineJusticeLineNumbers
 ---@field wrapped_lines? LineJusticeWrappedLines
+---@field statuscol?     LineJusticeStatuscol
 
 -- ---------------------------------------------------------------------------
 -- Defaults
@@ -118,6 +170,13 @@ local defaults = {
   wrapped_lines = {
     indicator = "Bar",    -- vertical bar on wrapped continuation lines
     custom    = "",        -- only used when indicator = "Custom"
+  },
+  statuscol = {
+    bt_ignore      = { "nofile" }, -- never apply the custom stl to non-file bufs
+    ft_ignore      = {},           -- no filetype exclusions by default
+    relculright    = false,        -- left-align relative numbers by default
+    left_segments  = {},           -- no extra segments to the left
+    right_segments = {},           -- no extra segments to the right
   },
 }
 
@@ -383,6 +442,73 @@ local function resolve_highlights(overrides, theme_tbl)
 end
 
 -- ---------------------------------------------------------------------------
+-- statuscol integration
+-- ---------------------------------------------------------------------------
+
+---Build the bt_ignore list, guaranteeing "nofile" is always present.
+---
+--- Any extra entries the user supplies are merged in. "nofile" cannot be
+--- removed — the plugin must never activate in non-file buffers.
+---
+---@param  user_list string[]  The bt_ignore list from config.statuscol
+---@return string[]            Deduplicated list always containing "nofile"
+local function build_bt_ignore(user_list)
+  local seen = { nofile = true }
+  local result = { "nofile" }
+  for _, v in ipairs(user_list or {}) do
+    if not seen[v] then
+      seen[v] = true
+      result[#result + 1] = v
+    end
+  end
+  return result
+end
+
+---Wire line-justice into statuscol.nvim.
+---
+--- Called at the end of setup(). Builds the full statuscol config from the
+--- resolved LineJusticeStatuscol options and calls statuscol.setup().
+---
+--- If statuscol.nvim is not installed this function emits an ERROR-level
+--- notification and returns without crashing.
+---
+---@param sc_cfg LineJusticeStatuscol  Resolved statuscol config section
+local function wire_statuscol(sc_cfg)
+  local ok, statuscol = pcall(require, "statuscol")
+  if not ok then
+    vim.notify(
+      "[line-justice] statuscol.nvim is required but was not found. "
+        .. "Install 'luukvbaal/statuscol.nvim'.",
+      vim.log.levels.ERROR
+    )
+    return
+  end
+
+  -- Build the segments list: left_segments + lj segment + right_segments
+  local segments = {}
+
+  for _, seg in ipairs(sc_cfg.left_segments or {}) do
+    segments[#segments + 1] = seg
+  end
+
+  segments[#segments + 1] = {
+    text  = { M.segment },
+    click = "v:lua.ScLa",
+  }
+
+  for _, seg in ipairs(sc_cfg.right_segments or {}) do
+    segments[#segments + 1] = seg
+  end
+
+  statuscol.setup({
+    relculright = sc_cfg.relculright or false,
+    bt_ignore   = build_bt_ignore(sc_cfg.bt_ignore),
+    ft_ignore   = sc_cfg.ft_ignore or {},
+    segments    = segments,
+  })
+end
+
+-- ---------------------------------------------------------------------------
 -- Segment (built once at module load, closes over _state)
 -- ---------------------------------------------------------------------------
 --
@@ -474,16 +600,9 @@ end
 
 ---The statuscol.nvim segment function for line-justice.
 ---
---- Assigned at module load — never nil. Wire it into your statuscol config:
----
----   local lj = require("line-justice")
----   lj.setup()
----
----   require("statuscol").setup({
----     segments = {
----       { text = { lj.segment }, click = "v:lua.ScLa" },
----     },
----   })
+--- Assigned at module load — never nil. line-justice wires this into
+--- statuscol automatically inside setup(). You do not need to call
+--- statuscol.setup() yourself.
 ---
 --- The function closes over internal state that setup() mutates in place.
 --- This means:
@@ -492,10 +611,6 @@ end
 ---     without re-wiring statuscol
 ---   • if the segment is rendered before setup() has been called, a one-shot
 ---     ERROR notification is emitted and an empty string is returned
----
---- You can place other segments (gitsigns, diagnostics, etc.) freely around
---- it — line-justice never calls statuscol.setup() itself, so there is no
---- conflict with your own statuscol configuration.
 ---
 ---@type fun(args: table): string
 M.segment = _segment
@@ -506,8 +621,10 @@ M.segment = _segment
 --- function, and enables the number/relativenumber options that statuscol
 --- requires to populate args.lnum and args.relnum.
 ---
---- setup() does NOT call statuscol.setup(). Wire the segment yourself — see
---- M.segment above and examples/lazy-spec.lua.
+--- setup() ALWAYS calls statuscol.setup() internally. bt_ignore = { "nofile" }
+--- is enforced — the plugin never applies its statuscolumn to non-file buffers
+--- (quickfix, terminal, prompt, etc.). Additional bt_ignore entries can be
+--- appended via opts.statuscol.bt_ignore.
 ---
 --- ── The simplest setup ──────────────────────────────────────────────────────
 ---
@@ -519,11 +636,11 @@ M.segment = _segment
 ---   require("line-justice").setup({ line_numbers = { theme = "Dawn" } })
 ---   require("line-justice").setup({ line_numbers = { theme = "Midnight" } })
 ---
---- ── Auto-detect colours from your colorscheme ───────────────────────────────
+--- ── Auto-detect colours from your colorscheme ─────────────────────────────
 ---
 ---   require("line-justice").setup({ line_numbers = { theme = nil } })
 ---
---- ── Named wrapped-line indicator ────────────────────────────────────────────
+--- ── Named wrapped-line indicator ──────────────────────────────────────────
 ---
 ---   require("line-justice").setup({
 ---     wrapped_lines = { indicator = "Arrow" },   -- ↳
@@ -531,10 +648,28 @@ M.segment = _segment
 ---
 ---   -- Other built-ins: "None", "Chevron", "Dot", "Ellipsis", "Bar"
 ---
---- ── Custom wrapped-line indicator ───────────────────────────────────────────
+--- ── Custom wrapped-line indicator ────────────────────────────────────────
 ---
 ---   require("line-justice").setup({
 ---     wrapped_lines = { indicator = "Custom", custom = "⤷" },
+---   })
+---
+--- ── Adding extra segments alongside line-justice ─────────────────────────
+---
+---   require("line-justice").setup({
+---     statuscol = {
+---       left_segments  = { { text = { "%s" }, click = "v:lua.ScSa" } },
+---       right_segments = { { text = { "%C" }, click = "v:lua.ScFa" } },
+---     },
+---   })
+---
+--- ── Excluding additional buftypes / filetypes ────────────────────────────
+---
+---   require("line-justice").setup({
+---     statuscol = {
+---       bt_ignore = { "nofile", "terminal" },
+---       ft_ignore = { "NvimTree", "neo-tree" },
+---     },
 ---   })
 ---
 --- ── Full example ────────────────────────────────────────────────────────────
@@ -550,6 +685,13 @@ M.segment = _segment
 ---       indicator = "Custom",
 ---       custom    = "╰",
 ---     },
+---     statuscol = {
+---       bt_ignore      = { "nofile", "terminal" },
+---       ft_ignore      = { "NvimTree" },
+---       relculright    = true,
+---       left_segments  = { { text = { "%s" }, click = "v:lua.ScSa" } },
+---       right_segments = { { text = { "%C" }, click = "v:lua.ScFa" } },
+---     },
 ---   })
 ---
 ---@param opts? LineJusticeConfig  Partial config; deep-merged with defaults
@@ -558,6 +700,7 @@ function M.setup(opts)
 
   local ln_cfg = config.line_numbers
   local wl_cfg = config.wrapped_lines
+  local sc_cfg = config.statuscol
 
   -- Resolve the named theme into a concrete colour table via the registry
   local theme_tbl = {}
@@ -595,6 +738,10 @@ function M.setup(opts)
   -- picks up the new config without statuscol needing to be re-wired.
   _state.indicator_char = indicator_char
   _state.ready          = true
+
+  -- Always wire statuscol. bt_ignore = { "nofile" } is guaranteed by
+  -- build_bt_ignore() inside wire_statuscol().
+  wire_statuscol(sc_cfg)
 end
 
 ---Return the current resolved configuration.
