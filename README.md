@@ -2,6 +2,8 @@
 
 **Absolute justice with relative context** — a Neovim plugin that shows both absolute and relative line numbers simultaneously, making pair programming, code reviews, and remote collaboration effortless.
 
+When combined with [statuscol.nvim](https://github.com/luukvbaal/statuscol.nvim), [gitsigns.nvim](https://github.com/lewis6991/gitsigns.nvim), and your LSP, line-justice anchors a complete, information-dense statuscolumn — fold indicators, git change markers, diagnostic signs, and dual line numbers, all in one clean gutter.
+
 ---
 
 ## The Problem
@@ -43,8 +45,15 @@ When you need to jump, you use the relative number. When you reference, you use 
 
 ## Requirements
 
+### Required
+
 - **NeoVim 0.10+**
-- **[luukvbaal/statuscol.nvim](https://github.com/luukvbaal/statuscol.nvim)** (required — handles statuscolumn rendering)
+- **[luukvbaal/statuscol.nvim](https://github.com/luukvbaal/statuscol.nvim)** — handles all statuscolumn rendering; line-justice provides the segment
+
+### Recommended
+
+- **[lewis6991/gitsigns.nvim](https://github.com/lewis6991/gitsigns.nvim)** — git change indicators (added/modified/deleted lines) in the sign column
+- **An LSP** (e.g. [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig)) — populates the `diagnostic/signs` namespace for inline error, warning, hint, and info markers
 
 ## How It Works
 
@@ -193,46 +202,72 @@ lj.setup({
   },
 
 })
-
--- Wire the segment into statuscol after setup()
-require("statuscol").setup({
-  segments = {
-    { text = { lj.segment }, click = "v:lua.ScLa" },
-  },
-})
 ```
 
 ---
 
-## Other Plugins in the Statuscolumn
+## The Full Statuscolumn
 
-Because line-justice never calls `statuscol.setup()`, you have complete freedom over what else appears in the statuscolumn. Place other segments around `lj.segment` in your statuscol config.
-
-### gitsigns sign column
+Because line-justice never calls `statuscol.setup()`, you have complete freedom over what else appears in the statuscolumn. The recommended config composes five segments into a single, information-dense gutter:
 
 ```lua
--- In your gitsigns setup:
-require("gitsigns").setup({
-  numhl      = true,
-  signcolumn = true,
-})
-
--- In your statuscol setup — sign column to the LEFT of line-justice:
+local builtin = require("statuscol.builtin")
 require("statuscol").setup({
+  relculright = true,
   segments = {
-    { text = { "%s" },        click = "v:lua.ScSa" }, -- sign column
-    { text = { lj.segment },  click = "v:lua.ScLa" }, -- line-justice
+    { text = { builtin.foldfunc },                                                      click = "v:lua.ScFa" },
+    { sign = { namespace = { "gitsigns" }, maxwidth = 1, colwidth = 1, auto = true },   click = "v:lua.ScSa" },
+    { sign = { namespace = { "diagnostic/signs" }, maxwidth = 2, auto = true },         click = "v:lua.ScSa" },
+    { sign = { name = { ".*" }, maxwidth = 2, colwidth = 1, auto = true, wrap = true }, click = "v:lua.ScSa" },
+    { text = { lj.segment },                                                            click = "v:lua.ScLa" },
   },
 })
 ```
 
-### Fold column
+Reading left to right, each segment adds a distinct layer of information:
+
+### `builtin.foldfunc` — fold column
+
+Renders NeoVim's native fold indicators using statuscol's built-in fold function. Shows `▶` on foldable lines and `│` on open fold contents. Clicking it opens or closes the fold (`ScFa`). Requires `foldmethod` to be set (e.g. `treesitter`, `indent`, or `expr`).
+
+**Why it's here:** Code navigation. Collapse functions, classes, or blocks you're not working on. The fold column only appears when there are folds — it takes no space otherwise.
+
+### `gitsigns` namespace — git change markers
+
+Renders [gitsigns.nvim](https://github.com/lewis6991/gitsigns.nvim) signs in a dedicated 1-character column. Shows `│` for modified lines, `▎` for added lines, and `▁` for deleted lines (exact characters depend on your gitsigns config). Clicking a sign triggers the gitsigns click handler (`ScSa`).
+
+**Why it's here:** At-a-glance diff awareness. You can see exactly which lines have changed since the last commit without leaving the file. Invaluable during code review and when rebasing.
+
+### `diagnostic/signs` namespace — LSP diagnostics
+
+Renders LSP diagnostic signs (`E` errors, `W` warnings, `H` hints, `I` info) from the `diagnostic/signs` namespace. `maxwidth = 2` allows up to two diagnostic signs per line.
+
+**Why it's here:** Inline error visibility. You see problems the moment your LSP reports them, right next to the line number — no need to scan the statusline or run `:lua vim.diagnostic.open_float()`.
+
+### `name = { ".*" }` — catch-all signs
+
+A catch-all segment that renders any other signs not captured by the two namespace segments above — debugger breakpoints, bookmarks, test results, and anything else. `wrap = true` means signs on wrapped continuation lines are shown on the first real line.
+
+**Why it's here:** Future-proofing. Any plugin that places a sign (DAP breakpoints, neotest, marks.nvim, etc.) will appear here automatically without any additional config.
+
+### `lj.segment` — dual line numbers
+
+The line-justice segment itself. Absolute line number on the left, relative distance on the right. See [The Solution](#the-solution) above.
+
+**Why it's last:** The numbers are the anchor. Everything to the left is contextual metadata about the line; the numbers are the line's identity. Placing them rightmost keeps them closest to the code.
+
+---
+
+### Minimal setup (line numbers only)
+
+If you don't use gitsigns or an LSP, you can strip the config down to just the essentials:
 
 ```lua
+local builtin = require("statuscol.builtin")
 require("statuscol").setup({
   segments = {
-    { text = { lj.segment }, click = "v:lua.ScLa" }, -- line-justice
-    { text = { "%C" },        click = "v:lua.ScFa" }, -- fold column
+    { text = { builtin.foldfunc }, click = "v:lua.ScFa" },
+    { text = { lj.segment },       click = "v:lua.ScLa" },
   },
 })
 ```
@@ -247,7 +282,7 @@ require("statuscol").setup({
   bt_ignore   = { "nofile" },
   ft_ignore   = { "NvimTree", "neo-tree" },
   segments    = {
-    { text = { lj.segment }, click = "v:lua.ScLa" },
+    -- your segments here
   },
 })
 ```
