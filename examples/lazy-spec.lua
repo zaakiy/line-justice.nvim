@@ -10,14 +10,19 @@
 -- It does NOT call statuscol.setup() — you wire the segment into your own
 -- statuscol config. This means it never conflicts with your statuscol setup.
 --
--- Minimal wiring:
+-- Recommended wiring (fold + diagnostic signs + other signs + line-justice):
 --
---   local lj = require("line-justice")
+--   local lj      = require("line-justice")
+--   local builtin = require("statuscol.builtin")
 --   lj.setup()
 --
 --   require("statuscol").setup({
+--     relculright = true,
 --     segments = {
---       { text = { lj.segment }, click = "v:lua.ScLa" },
+--       { text = { builtin.foldfunc },                                                    click = "v:lua.ScFa" },
+--       { sign = { namespace = { "diagnostic/signs" }, maxwidth = 2, auto = true },       click = "v:lua.ScSa" },
+--       { sign = { name = { ".*" }, maxwidth = 2, colwidth = 1, auto = true, wrap = true }, click = "v:lua.ScSa" },
+--       { text = { lj.segment },                                                          click = "v:lua.ScLa" },
 --     },
 --   })
 --
@@ -67,6 +72,11 @@
 --
 -- lazy = false ensures setup() runs at startup so M.segment is populated
 -- before statuscol.setup() reads it.
+--
+-- statuscol.nvim is listed as a dependency so lazy.nvim loads it first.
+-- All statuscol configuration lives here — do NOT add a separate statuscol
+-- plugin spec that also calls statuscol.setup(), or the two calls will
+-- conflict and whichever runs last will overwrite the other.
 
 return {
   {
@@ -81,13 +91,20 @@ return {
     },
 
     config = function(_, opts)
-      local lj = require("line-justice")
+      local lj      = require("line-justice")
+      local builtin = require("statuscol.builtin")
       lj.setup(opts)
 
-      -- Wire the segment into statuscol. Place other segments around it freely.
+      -- Wire the segment into statuscol alongside fold and sign segments.
+      -- Place other segments around lj.segment freely — line-justice never
+      -- calls statuscol.setup() itself, so there is no conflict.
       require("statuscol").setup({
+        relculright = true,
         segments = {
-          { text = { lj.segment }, click = "v:lua.ScLa" },
+          { text = { builtin.foldfunc },                                                      click = "v:lua.ScFa" },
+          { sign = { namespace = { "diagnostic/signs" }, maxwidth = 2, auto = true },         click = "v:lua.ScSa" },
+          { sign = { name = { ".*" }, maxwidth = 2, colwidth = 1, auto = true, wrap = true }, click = "v:lua.ScSa" },
+          { text = { lj.segment },                                                            click = "v:lua.ScLa" },
         },
       })
     end,
@@ -150,12 +167,20 @@ return {
   -- Because line-justice doesn't own statuscol.setup(), you have full control
   -- over what else appears in the statuscolumn. Common examples:
   --
+  -- Minimal — just line-justice, no fold or sign columns:
+  --
+  --   require("statuscol").setup({
+  --     segments = {
+  --       { text = { lj.segment }, click = "v:lua.ScLa" },
+  --     },
+  --   })
+  --
   -- Gitsigns sign column to the LEFT of line-justice numbers:
   --
   --   require("statuscol").setup({
   --     segments = {
-  --       { text = { "%s" },         click = "v:lua.ScSa" }, -- sign column
-  --       { text = { lj.segment },   click = "v:lua.ScLa" }, -- line-justice
+  --       { text = { "%s" },        click = "v:lua.ScSa" }, -- sign column
+  --       { text = { lj.segment },  click = "v:lua.ScLa" }, -- line-justice
   --     },
   --   })
   --
@@ -163,8 +188,8 @@ return {
   --
   --   require("statuscol").setup({
   --     segments = {
-  --       { text = { lj.segment },   click = "v:lua.ScLa" }, -- line-justice
-  --       { text = { "%C" },         click = "v:lua.ScFa" }, -- fold column
+  --       { text = { lj.segment }, click = "v:lua.ScLa" }, -- line-justice
+  --       { text = { "%C" },        click = "v:lua.ScFa" }, -- fold column
   --     },
   --   })
   --

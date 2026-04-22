@@ -73,9 +73,14 @@ It does **not** call `statuscol.setup()`. You wire `require("line-justice").segm
     local lj = require("line-justice")
     lj.setup()
 
+    local builtin = require("statuscol.builtin")
     require("statuscol").setup({
+      relculright = true,
       segments = {
-        { text = { lj.segment }, click = "v:lua.ScLa" },
+        { text = { builtin.foldfunc },                                                      click = "v:lua.ScFa" },
+        { sign = { namespace = { "diagnostic/signs" }, maxwidth = 2, auto = true },         click = "v:lua.ScSa" },
+        { sign = { name = { ".*" }, maxwidth = 2, colwidth = 1, auto = true, wrap = true }, click = "v:lua.ScSa" },
+        { text = { lj.segment },                                                            click = "v:lua.ScLa" },
       },
     })
   end,
@@ -94,9 +99,14 @@ use {
     local lj = require("line-justice")
     lj.setup()
 
+    local builtin = require("statuscol.builtin")
     require("statuscol").setup({
+      relculright = true,
       segments = {
-        { text = { lj.segment }, click = "v:lua.ScLa" },
+        { text = { builtin.foldfunc },                                                      click = "v:lua.ScFa" },
+        { sign = { namespace = { "diagnostic/signs" }, maxwidth = 2, auto = true },         click = "v:lua.ScSa" },
+        { sign = { name = { ".*" }, maxwidth = 2, colwidth = 1, auto = true, wrap = true }, click = "v:lua.ScSa" },
+        { text = { lj.segment },                                                            click = "v:lua.ScLa" },
       },
     })
   end,
@@ -108,12 +118,17 @@ use {
 Clone both `luukvbaal/statuscol.nvim` and `zaakiy/line-justice.nvim`, add them to your `runtimepath`, then in your `init.lua`:
 
 ```lua
-local lj = require("line-justice")
+local lj     = require("line-justice")
+local builtin = require("statuscol.builtin")
 lj.setup()
 
 require("statuscol").setup({
+  relculright = true,
   segments = {
-    { text = { lj.segment }, click = "v:lua.ScLa" },
+    { text = { builtin.foldfunc },                                                      click = "v:lua.ScFa" },
+    { sign = { namespace = { "diagnostic/signs" }, maxwidth = 2, auto = true },         click = "v:lua.ScSa" },
+    { sign = { name = { ".*" }, maxwidth = 2, colwidth = 1, auto = true, wrap = true }, click = "v:lua.ScSa" },
+    { text = { lj.segment },                                                            click = "v:lua.ScLa" },
   },
 })
 ```
