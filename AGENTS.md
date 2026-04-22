@@ -105,11 +105,18 @@ User calls lj.setup(opts)
   │    → re-runs resolve_highlights on every :colorscheme change
   └─ _state.indicator_char = indicator_char
   └─ _state.ready = true
-
-User wires into statuscol (in their own config, not done by line-justice):
-  require("statuscol").setup({
-    segments = { { text = { lj.segment }, click = "v:lua.ScLa" } },
-  })
+  └─ wire_statuscol(config.statuscol)
+       → build_bt_ignore(sc_cfg.bt_ignore)  ← "nofile" always included
+       → statuscol.setup({
+           relculright = ...,
+           bt_ignore   = ...,   -- guaranteed to contain "nofile"
+           ft_ignore   = ...,
+           segments    = [
+             ...sc_cfg.left_segments,
+             { text = { M.segment }, click = "v:lua.ScLa" },
+             ...sc_cfg.right_segments,
+           ],
+         })
 
 statuscol calls M.segment (= _segment) for every statuscolumn render:
   _state.ready == false  → one-shot ERROR notify, return ""
@@ -321,6 +328,8 @@ All helpers are `local` to `init.lua` and not exported.
 | `resolve_indicator(wl_cfg)` | `LineJusticeWrappedLines → string` | Validates and returns the indicator character; emits WARN for unknown/empty. |
 | `centre(str, width)` | `(string, number) → string` | Centres `str` in a field of `width` chars with space padding. |
 | `resolve_highlights(overrides, theme_tbl)` | `(table, table) → nil` | Resolves all six colour slots and calls `vim.api.nvim_set_hl` for each. |
+| `build_bt_ignore(user_list)` | `string[] → string[]` | Deduplicates the user's `bt_ignore` list; always prepends `"nofile"`. Hard invariant: the custom statuscolumn is never applied to non-file buffers. |
+| `wire_statuscol(sc_cfg)` | `LineJusticeStatuscol → nil` | Loads `statuscol.nvim` via `pcall`, builds the segments list from `sc_cfg.left_segments` + lj segment + `sc_cfg.right_segments`, then calls `statuscol.setup()`. Emits ERROR if statuscol is not installed. |
 
 ---
 
@@ -328,17 +337,33 @@ All helpers are `local` to `init.lua` and not exported.
 
 ### Responsibility boundary
 
-line-justice is a **segment provider**, not a statuscol configurator.
+line-justice **owns** the `statuscol.setup()` call. The user never calls it directly.
 
-| Owned by line-justice | Owned by the user (via statuscol) |
+`setup()` always calls `statuscol.setup()` internally via `wire_statuscol()`. Segment placement, `bt_ignore`, `ft_ignore`, and `relculright` are all controllable via the `statuscol` key in `lj.setup(opts)`.
+
+`bt_ignore = { "nofile" }` is a hard invariant — `build_bt_ignore()` guarantees it is always present regardless of what the user passes. The plugin must never activate in non-file buffers (quickfix, terminal, prompt, etc.).
+
+| Owned by line-justice | Configurable by the user (via `statuscol` opts) |
 |---|---|
-| Highlight group registration | `statuscol.setup()` call |
-| Colour theme resolution | Segment placement and ordering |
-| Number formatting and rendering | Other segments (signs, folds, etc.) |
-| Wrapped-line indicator | `relculright`, `bt_ignore`, `ft_ignore`, … |
-| `vim.o.number` / `vim.o.relativenumber` | Everything else |
+| Highlight group registration | `left_segments` / `right_segments` (extra segments) |
+| Colour theme resolution | `bt_ignore` ("nofile" always included) |
+| Number formatting and rendering | `ft_ignore` |
+| Wrapped-line indicator | `relculright` |
+| `vim.o.number` / `vim.o.relativenumber` | |
+| `statuscol.setup()` call | |
 
-line-justice **never** calls `statuscol.setup()`. This eliminates the entire class of conflict that arises when two plugins both try to own statuscol configuration.
+### `wire_statuscol(sc_cfg)` — internal helper
+
+Called at the end of `setup()`. Loads `statuscol` via `pcall` (emits ERROR-level notify if not found), then calls `statuscol.setup()` with:
+
+- `relculright` — from `sc_cfg.relculright`
+- `bt_ignore`   — from `build_bt_ignore(sc_cfg.bt_ignore)` ← `"nofile"` always present
+- `ft_ignore`   — from `sc_cfg.ft_ignore`
+- `segments`    — `sc_cfg.left_segments` + `{ text = { M.segment }, click = "v:lua.ScLa" }` + `sc_cfg.right_segments`
+
+### `build_bt_ignore(user_list)` — internal helper
+
+Deduplicates the user's `bt_ignore` list and prepends `"nofile"`, which is always guaranteed to be present. This enforces the hard invariant: the custom statuscolumn is never applied to non-file buffers.
 
 ### Segment logic (`_segment` function)
 
@@ -382,17 +407,15 @@ This means columns automatically grow as the file grows — no manual width conf
 
 ### Placing other plugins alongside line-justice
 
-Because line-justice never calls `statuscol.setup()`, the user can freely place other segments around `lj.segment`:
+Use `statuscol.left_segments` and `statuscol.right_segments` in your `lj.setup()` call:
 
 ```lua
-require("statuscol").setup({
-  segments = {
-    { text = { "%s" },        click = "v:lua.ScSa" }, -- gitsigns signs (left)
-    { text = { lj.segment },  click = "v:lua.ScLa" }, -- line-justice numbers
-    { text = { "%C" },        click = "v:lua.ScFa" }, -- fold column (right)
+require("line-justice").setup({
+  statuscol = {
+    left_segments  = { { text = { "%s" }, click = "v:lua.ScSa" } }, -- signs
+    right_segments = { { text = { "%C" }, click = "v:lua.ScFa" } }, -- folds
   },
 })
-```
 
 ---
 
@@ -443,9 +466,11 @@ function M.setup(opts)
 end
 ```
 
-### Do not call `statuscol.setup()`
+### Always call `statuscol.setup()` via `wire_statuscol()`
 
-line-justice must never call `statuscol.setup()`. The segment is exposed via `M.segment` for the user to wire in themselves. This is a deliberate architectural boundary — see [Section 9](#9-statuscolnvim-integration).
+line-justice must always call `statuscol.setup()` internally at the end of `setup()`. The call is encapsulated in `wire_statuscol(sc_cfg)`. Never bypass this or move it to the user's responsibility.
+
+`bt_ignore = { "nofile" }` is a hard invariant enforced by `build_bt_ignore()`. It must never be removable by user config.
 
 ---
 
@@ -591,7 +616,7 @@ There is currently no automated test suite. All testing is manual. Before any no
 - [ ] **Segment before setup()** — renders a blank gutter; emits exactly one ERROR notification regardless of how many lines are rendered; no spam.
 - [ ] **Re-setup()** — calling `setup()` a second time (e.g. to switch theme) takes effect immediately in the already-wired statuscol; no re-wiring required; no duplicate ColorScheme autocmds.
 - [ ] **Segment captured before setup()** — statuscol wired with `lj.segment` before `lj.setup()` is called; after `setup()` runs, rendering works correctly.
-- [ ] **Plugin buffers** (file tree, dashboard, picker) — no custom statuscolumn applied (controlled by statuscol's `bt_ignore` / `ft_ignore` in the user's statuscol config).
+- [ ] **Plugin buffers** (file tree, dashboard, picker, quickfix, terminal) — no custom statuscolumn applied. `bt_ignore = { "nofile" }` is always present; verify additional entries in `statuscol.bt_ignore` / `statuscol.ft_ignore` are respected.
 - [ ] **Multiple plugins in statuscolumn** — gitsigns sign column, line-justice numbers, fold column all coexist correctly when wired via the user's statuscol config.
 - [ ] **Multiple `setup()` calls** — no duplicate autocmds, no crash.
 - [ ] **Cross-platform** — Linux, macOS, Windows (WSL).
@@ -611,7 +636,8 @@ There is currently no automated test suite. All testing is manual. Before any no
 | `Unknown theme` warning | Typo in `theme` string | Check `themes.list()` for valid names (case-sensitive); ensure custom themes are registered before `setup()` |
 | `Unknown indicator` warning | Typo in `indicator` string | Check `WRAPPED_INDICATORS` keys (case-sensitive) |
 | Duplicate `ColorScheme` autocmds | `setup()` called multiple times | Already handled — augroup created with `{ clear = true }` |
-| Conflict with existing statuscol config | Line-justice calling `statuscol.setup()` | This should never happen — line-justice never calls `statuscol.setup()`. If it does, file a bug. |
+| User's own `statuscol.setup()` overrides line-justice | User called `statuscol.setup()` after `lj.setup()` | Let line-justice own `statuscol.setup()`. Pass extra segments via `statuscol.left_segments` / `statuscol.right_segments` in `lj.setup()` instead. |
+| `bt_ignore` doesn't include "nofile" | Bug in `build_bt_ignore()` | File a bug — this is a hard invariant. |
 
 ---
 
