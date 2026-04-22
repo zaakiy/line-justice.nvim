@@ -67,7 +67,7 @@ It does **not** call `statuscol.setup()`. You wire `require("line-justice").segm
 ```lua
 {
   "zaakiy/line-justice.nvim",
-  dependencies = { "luukvbaal/statuscol.nvim" },
+  dependencies = { "luukvbaal/statuscol.nvim", "lewis6991/gitsigns.nvim" },
   lazy = false,
   config = function()
     local lj = require("line-justice")
@@ -78,6 +78,7 @@ It does **not** call `statuscol.setup()`. You wire `require("line-justice").segm
       relculright = true,
       segments = {
         { text = { builtin.foldfunc },                                                      click = "v:lua.ScFa" },
+        { sign = { namespace = { "gitsigns" }, maxwidth = 1, colwidth = 1, auto = true },   click = "v:lua.ScSa" },
         { sign = { namespace = { "diagnostic/signs" }, maxwidth = 2, auto = true },         click = "v:lua.ScSa" },
         { sign = { name = { ".*" }, maxwidth = 2, colwidth = 1, auto = true, wrap = true }, click = "v:lua.ScSa" },
         { text = { lj.segment },                                                            click = "v:lua.ScLa" },
@@ -94,7 +95,7 @@ It does **not** call `statuscol.setup()`. You wire `require("line-justice").segm
 ```lua
 use {
   "zaakiy/line-justice.nvim",
-  requires = { "luukvbaal/statuscol.nvim" },
+  requires = { "luukvbaal/statuscol.nvim", "lewis6991/gitsigns.nvim" },
   config = function()
     local lj = require("line-justice")
     lj.setup()
@@ -104,6 +105,7 @@ use {
       relculright = true,
       segments = {
         { text = { builtin.foldfunc },                                                      click = "v:lua.ScFa" },
+        { sign = { namespace = { "gitsigns" }, maxwidth = 1, colwidth = 1, auto = true },   click = "v:lua.ScSa" },
         { sign = { namespace = { "diagnostic/signs" }, maxwidth = 2, auto = true },         click = "v:lua.ScSa" },
         { sign = { name = { ".*" }, maxwidth = 2, colwidth = 1, auto = true, wrap = true }, click = "v:lua.ScSa" },
         { text = { lj.segment },                                                            click = "v:lua.ScLa" },
@@ -115,7 +117,7 @@ use {
 
 ### Manual (no plugin manager)
 
-Clone both `luukvbaal/statuscol.nvim` and `zaakiy/line-justice.nvim`, add them to your `runtimepath`, then in your `init.lua`:
+Clone `luukvbaal/statuscol.nvim`, `lewis6991/gitsigns.nvim`, and `zaakiy/line-justice.nvim`, add them to your `runtimepath`, then in your `init.lua`:
 
 ```lua
 local lj     = require("line-justice")
@@ -126,6 +128,7 @@ require("statuscol").setup({
   relculright = true,
   segments = {
     { text = { builtin.foldfunc },                                                      click = "v:lua.ScFa" },
+    { sign = { namespace = { "gitsigns" }, maxwidth = 1, colwidth = 1, auto = true },   click = "v:lua.ScSa" },
     { sign = { namespace = { "diagnostic/signs" }, maxwidth = 2, auto = true },         click = "v:lua.ScSa" },
     { sign = { name = { ".*" }, maxwidth = 2, colwidth = 1, auto = true, wrap = true }, click = "v:lua.ScSa" },
     { text = { lj.segment },                                                            click = "v:lua.ScLa" },
