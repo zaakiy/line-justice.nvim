@@ -454,7 +454,8 @@ local function _segment(args)
     -- The separator space is included in the relative column width
     rel_num = " " .. string.rep(" ", math.max(0, col_w - #rel_num)) .. rel_num
 
-    return abs_hl .. abs_num .. rel_hl .. rel_num
+    -- Add trailing space to ensure separation from buffer content
+    return abs_hl .. abs_num .. rel_hl .. rel_num .. " "
 
   else
     -- ── Soft-wrapped continuation line ──────────────────────────────────
