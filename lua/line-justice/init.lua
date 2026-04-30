@@ -450,12 +450,10 @@ local function _segment(args)
     -- Right-align the absolute number
     abs_num = string.rep(" ", math.max(0, col_w - #abs_num)) .. abs_num
 
-    -- Pad the relative number so the total gutter width stays fixed
-    local target_w  = col_w + 1 + col_w
-    local current_w = #abs_num + 1 + #rel_num
-    local rel_pad   = string.rep(" ", math.max(0, target_w - current_w))
+    -- Right-align the relative number (ensures consistent spacing regardless of digit count)
+    rel_num = string.rep(" ", math.max(0, col_w - #rel_num)) .. rel_num
 
-    return abs_hl .. abs_num .. " " .. rel_hl .. rel_num .. rel_pad
+    return abs_hl .. abs_num .. " " .. rel_hl .. rel_num
 
   else
     -- ── Soft-wrapped continuation line ──────────────────────────────────

@@ -612,6 +612,63 @@ There is currently no automated test suite. All testing is manual. Before any no
 | `Unknown indicator` warning | Typo in `indicator` string | Check `WRAPPED_INDICATORS` keys (case-sensitive) |
 | Duplicate `ColorScheme` autocmds | `setup()` called multiple times | Already handled — augroup created with `{ clear = true }` |
 | Conflict with existing statuscol config | Line-justice calling `statuscol.setup()` | This should never happen — line-justice never calls `statuscol.setup()`. If it does, file a bug. |
+| No padding after relative line number | Relative numbers not right-aligned within column | Both absolute and relative numbers must be right-aligned within `col_w` to maintain consistent gutter width. See [Issue #1](https://github.com/zaakiy/line-justice.nvim/issues/1) for details. |
+
+---
+
+## 15a. Bug Fix: Relative Number Alignment (Issue #1)
+
+### Problem
+
+When relative line numbers had varying digit counts (e.g., single-digit vs. two-digit), the spacing between the relative number and the buffer content was inconsistent. Single-digit relative numbers had proper padding, but multi-digit numbers did not.
+
+### Root Cause
+
+The absolute line number was right-aligned within its column width (`col_w`), but the relative line number was **left-aligned** (no padding before it). This caused the total gutter width to vary depending on the relative number's width.
+
+### Solution
+
+Both the absolute and relative line numbers must be right-aligned within their respective `col_w` columns. This ensures:
+- Fixed gutter width: `col_w + 1 (space) + col_w`
+- Consistent spacing regardless of digit count
+- Proper alignment with wrapped-line indicators
+
+### Implementation
+
+In the `_segment` function's real-line rendering path (when `args.virtnum == 0`):
+
+**Before:**
+```lua
+-- Right-align the absolute number
+abs_num = string.rep(" ", math.max(0, col_w - #abs_num)) .. abs_num
+
+-- Pad the relative number so the total gutter width stays fixed
+local target_w  = col_w + 1 + col_w
+local current_w = #abs_num + 1 + #rel_num
+local rel_pad   = string.rep(" ", math.max(0, target_w - current_w))
+
+return abs_hl .. abs_num .. " " .. rel_hl .. rel_num .. rel_pad
+```
+
+**After:**
+```lua
+-- Right-align the absolute number
+abs_num = string.rep(" ", math.max(0, col_w - #abs_num)) .. abs_num
+
+-- Right-align the relative number (ensures consistent spacing regardless of digit count)
+rel_num = string.rep(" ", math.max(0, col_w - #rel_num)) .. rel_num
+
+return abs_hl .. abs_num .. " " .. rel_hl .. rel_num
+```
+
+### Testing
+
+Verify the fix with files of varying sizes:
+- **Small files (< 10 lines):** Single-digit relative numbers, single-digit absolute numbers
+- **Medium files (100–999 lines):** Two-digit relative numbers, three-digit absolute numbers
+- **Large files (1,000+ lines):** Three-digit relative numbers, four-digit absolute numbers with thousands separators
+
+In all cases, the spacing between the relative number and buffer content should be consistent and uniform.
 
 ---
 
