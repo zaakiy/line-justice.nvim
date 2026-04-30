@@ -450,10 +450,11 @@ local function _segment(args)
     -- Right-align the absolute number
     abs_num = string.rep(" ", math.max(0, col_w - #abs_num)) .. abs_num
 
-    -- Right-align the relative number (ensures consistent spacing regardless of digit count)
-    rel_num = string.rep(" ", math.max(0, col_w - #rel_num)) .. rel_num
+    -- Right-align the relative number with separator space
+    -- The separator space is included in the relative column width
+    rel_num = " " .. string.rep(" ", math.max(0, col_w - #rel_num)) .. rel_num
 
-    return abs_hl .. abs_num .. " " .. rel_hl .. rel_num
+    return abs_hl .. abs_num .. rel_hl .. rel_num
 
   else
     -- ── Soft-wrapped continuation line ──────────────────────────────────
