@@ -624,12 +624,12 @@ When relative line numbers had varying digit counts (e.g., single-digit vs. two-
 
 ### Root Cause
 
-The absolute line number was right-aligned within its column width (`col_w`), but the relative line number was **left-aligned** (no padding before it). This caused the total gutter width to vary depending on the relative number's width.
+The separator space between absolute and relative numbers was being rendered as a separate character, not as part of the relative number's column width. This caused the total gutter width to vary depending on the relative number's width.
 
 ### Solution
 
-Both the absolute and relative line numbers must be right-aligned within their respective `col_w` columns. This ensures:
-- Fixed gutter width: `col_w + 1 (space) + col_w`
+The separator space must be included as part of the relative number's right-alignment. This ensures:
+- Fixed gutter width: `col_w + 1 + col_w` (where the "+1" is the separator space)
 - Consistent spacing regardless of digit count
 - Proper alignment with wrapped-line indicators
 
@@ -655,10 +655,11 @@ return abs_hl .. abs_num .. " " .. rel_hl .. rel_num .. rel_pad
 -- Right-align the absolute number
 abs_num = string.rep(" ", math.max(0, col_w - #abs_num)) .. abs_num
 
--- Right-align the relative number (ensures consistent spacing regardless of digit count)
-rel_num = string.rep(" ", math.max(0, col_w - #rel_num)) .. rel_num
+-- Right-align the relative number with separator space
+-- The separator space is included in the relative column width
+rel_num = " " .. string.rep(" ", math.max(0, col_w - #rel_num)) .. rel_num
 
-return abs_hl .. abs_num .. " " .. rel_hl .. rel_num
+return abs_hl .. abs_num .. rel_hl .. rel_num
 ```
 
 ### Testing
@@ -668,7 +669,10 @@ Verify the fix with files of varying sizes:
 - **Medium files (100–999 lines):** Two-digit relative numbers, three-digit absolute numbers
 - **Large files (1,000+ lines):** Three-digit relative numbers, four-digit absolute numbers with thousands separators
 
-In all cases, the spacing between the relative number and buffer content should be consistent and uniform.
+In all cases, the gutter width should be consistent:
+- 56-line file: 5 characters (2 + 1 + 2)
+- 1000-line file: 11 characters (5 + 1 + 5)
+- 10000-line file: 13 characters (6 + 1 + 6)
 
 ---
 
