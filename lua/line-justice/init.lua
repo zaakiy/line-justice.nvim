@@ -358,10 +358,13 @@ local function fade_colour(hex, strength)
 end
 
 ---Map a relative line distance to one of four fade tiers for relative numbers.
----@param relnum number  Absolute value of args.relnum
+--- Takes the absolute value of relnum so lines above the cursor (where
+--- args.relnum is negative) are handled identically to lines below.
+---@param relnum number  args.relnum (negative above cursor, positive below)
 ---@param bands  table   { near, mid, far } thresholds
 ---@return string        "Near" | "Mid" | "Far" | "Distant"
 local function get_rel_tier(relnum, bands)
+  relnum = math.abs(relnum)
   if relnum <= bands.near then return "Near"
   elseif relnum <= bands.mid  then return "Mid"
   elseif relnum <= bands.far  then return "Far"
@@ -370,10 +373,13 @@ end
 
 ---Map a relative line distance to one of two fade tiers for absolute numbers.
 --- Absolute numbers use only two tiers (Near / Distant) for a subtler effect.
----@param relnum number  Absolute value of args.relnum
+--- Takes the absolute value of relnum so lines above the cursor (where
+--- args.relnum is negative) are handled identically to lines below.
+---@param relnum number  args.relnum (negative above cursor, positive below)
 ---@param bands  table   { near, mid, far } thresholds
 ---@return string        "Near" | "Distant"
 local function get_abs_tier(relnum, bands)
+  relnum = math.abs(relnum)
   if relnum <= bands.far then return "Near"
   else return "Distant" end
 end
