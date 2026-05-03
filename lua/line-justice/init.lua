@@ -65,6 +65,31 @@
 ---@field RelativeBelow?  table  Relative distance for lines below the cursor
 ---@field WrappedLine?    table  Colour of the wrapped-line indicator character
 
+
+---Distance-based colour fade for line numbers.
+---
+--- When enabled, line numbers progressively desaturate toward grey as their
+--- distance from the cursor increases. Relative numbers fade more aggressively
+--- than absolute numbers because they *are* the distance signal — a "3" should
+--- shout, an "87" should whisper.
+---
+--- Relative numbers use 4 tiers (Near → Mid → Far → Distant).
+--- Absolute numbers use 2 tiers (Near → Distant) for a subtler effect.
+---
+---@class LineJusticeFade
+---@field enabled?           boolean  Enable distance-based fading (default: true).
+---@field bands?             table    Distance thresholds: { near=5, mid=15, far=30 }.
+---                                   Lines within `near` rows → full colour.
+---                                   Lines within `mid`  rows → light fade.
+---                                   Lines within `far`  rows → stronger fade.
+---                                   Lines beyond `far`  rows → maximum fade.
+---@field relative_strength? number   Max fade for relative numbers, 0.0–1.0 (default: 0.75).
+---                                   0.0 = no fade. 1.0 = fully desaturated grey.
+---@field absolute_strength? number   Max fade for absolute numbers, 0.0–1.0 (default: 0.30).
+---                                   Kept lower so absolute numbers stay readable as
+---                                   reference points at any distance.
+
+
 ---Settings for the line-number columns.
 ---
 ---@class LineJusticeLineNumbers
@@ -76,6 +101,8 @@
 ---@field overrides? LineJusticeOverrides  Per-key colour overrides applied on top of
 ---                                        the named theme or auto-detect result.
 ---                                        Any key left out falls through unchanged.
+---@field fade?      LineJusticeFade       Distance-based colour fade settings.
+
 
 ---Settings for soft-wrapped continuation lines.
 ---
@@ -114,6 +141,12 @@ local defaults = {
     theme     = "Horizon", -- use the built-in Horizon palette by default
                            -- set to nil to auto-detect from your colorscheme
     overrides = {},        -- no overrides; all colours come from the theme
+    fade = {
+      enabled            = true,  -- progressively desaturate distant line numbers
+      bands              = { near = 5, mid = 15, far = 30 },
+      relative_strength  = 0.75,  -- relative numbers fade strongly (they ARE the distance signal)
+      absolute_strength  = 0.30,  -- absolute numbers fade subtly (reference points stay readable)
+    },
   },
   wrapped_lines = {
     indicator = "Bar",    -- vertical bar on wrapped continuation lines
@@ -146,11 +179,15 @@ local M = {}
 ---@class LineJusticeState
 ---@field indicator_char string   Pre-resolved wrapped-line indicator character
 ---@field ready          boolean  True once setup() has been called at least once
+---@field fade_enabled   boolean  True when distance-based fading is active
+---@field fade_bands     table    Distance thresholds: { near, mid, far }
 
 ---@type LineJusticeState
 local _state = {
   indicator_char = "",
   ready          = false,
+  fade_enabled   = false,
+  fade_bands     = { near = 5, mid = 15, far = 30 },
 }
 
 -- Ensures the "segment called before setup()" ERROR fires at most once,
@@ -228,7 +265,7 @@ local FALLBACK = {
 ---@return string  e.g. 1234 → "1,234"
 local function format_line_number(num)
   local str = tostring(num)
-  return str:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+  return (str:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", ""))
 end
 
 ---Convert a numeric colour value (as returned by nvim_get_hl) to hex.
@@ -291,6 +328,56 @@ local function centre(str, width)
   return string.rep(" ", left) .. str .. string.rep(" ", right)
 end
 
+---Interpolate a hex colour toward its own luminance grey by `strength`.
+---
+--- Desaturating toward grey (rather than simply darkening) works on both
+--- dark and light themes: the perceived brightness stays roughly constant
+--- while the hue fades away, making distant numbers recede without
+--- disappearing entirely.
+---
+---@param hex      string  Source colour, e.g. "#7b9ac7"
+---@param strength number  0.0 = original colour, 1.0 = fully grey
+---@return string          Interpolated hex colour
+local function fade_colour(hex, strength)
+  if strength <= 0 then return hex end
+  -- Parse the three channels
+  local r = tonumber(hex:sub(2, 3), 16)
+  local g = tonumber(hex:sub(4, 5), 16)
+  local b = tonumber(hex:sub(6, 7), 16)
+  if not (r and g and b) then return hex end
+  -- Luminance-weighted grey target (ITU-R BT.601)
+  local grey = math.floor(0.299 * r + 0.587 * g + 0.114 * b)
+  if strength >= 1 then
+    return string.format("#%02x%02x%02x", grey, grey, grey)
+  end
+  -- Linear interpolation toward grey
+  local nr = math.floor(r + (grey - r) * strength)
+  local ng = math.floor(g + (grey - g) * strength)
+  local nb = math.floor(b + (grey - b) * strength)
+  return string.format("#%02x%02x%02x", nr, ng, nb)
+end
+
+---Map a relative line distance to one of four fade tiers for relative numbers.
+---@param relnum number  Absolute value of args.relnum
+---@param bands  table   { near, mid, far } thresholds
+---@return string        "Near" | "Mid" | "Far" | "Distant"
+local function get_rel_tier(relnum, bands)
+  if relnum <= bands.near then return "Near"
+  elseif relnum <= bands.mid  then return "Mid"
+  elseif relnum <= bands.far  then return "Far"
+  else return "Distant" end
+end
+
+---Map a relative line distance to one of two fade tiers for absolute numbers.
+--- Absolute numbers use only two tiers (Near / Distant) for a subtler effect.
+---@param relnum number  Absolute value of args.relnum
+---@param bands  table   { near, mid, far } thresholds
+---@return string        "Near" | "Distant"
+local function get_abs_tier(relnum, bands)
+  if relnum <= bands.far then return "Near"
+  else return "Distant" end
+end
+
 -- ---------------------------------------------------------------------------
 -- Highlight resolution
 -- ---------------------------------------------------------------------------
@@ -310,7 +397,8 @@ end
 ---
 ---@param overrides  LineJusticeOverrides  User per-key overrides (may be empty)
 ---@param theme_tbl  LineJusticeOverrides  Resolved theme table (may be empty)
-local function resolve_highlights(overrides, theme_tbl)
+---@param fade_cfg   LineJusticeFade|nil   Fade config; nil or disabled = no banded groups
+local function resolve_highlights(overrides, theme_tbl, fade_cfg)
   overrides = overrides or {}
   theme_tbl = theme_tbl or {}
 
@@ -373,13 +461,49 @@ local function resolve_highlights(overrides, theme_tbl)
     WrappedLine   = resolve("WrappedLine",   { "NonText" }),
   }
 
-  -- Register the highlight groups used in the statuscolumn string
+  -- Register the flat highlight groups (always present; used when fade is off
+  -- and for the cursor line which is never faded).
   vim.api.nvim_set_hl(0, "LineJusticeCursorLine",    r.CursorLine)
   vim.api.nvim_set_hl(0, "LineJusticeAbsoluteAbove", r.AbsoluteAbove)
   vim.api.nvim_set_hl(0, "LineJusticeAbsoluteBelow", r.AbsoluteBelow)
   vim.api.nvim_set_hl(0, "LineJusticeRelativeAbove", r.RelativeAbove)
   vim.api.nvim_set_hl(0, "LineJusticeRelativeBelow", r.RelativeBelow)
   vim.api.nvim_set_hl(0, "LineJusticeWrappedLine",   r.WrappedLine)
+
+  -- Register banded fade groups when fade is enabled.
+  -- Relative numbers: 4 tiers (Near → Mid → Far → Distant).
+  -- Absolute numbers: 2 tiers (Near → Distant) — subtler effect.
+  if fade_cfg and fade_cfg.enabled ~= false then
+    local rel_s = fade_cfg.relative_strength or 0.75
+    local abs_s = fade_cfg.absolute_strength or 0.30
+
+    -- Relative tiers: evenly distribute strength across 4 steps
+    local rel_tiers = {
+      Near    = 0.0,
+      Mid     = rel_s * 0.33,
+      Far     = rel_s * 0.66,
+      Distant = rel_s,
+    }
+    for tier, strength in pairs(rel_tiers) do
+      local hl_above = vim.tbl_deep_extend("force", {}, r.RelativeAbove)
+      local hl_below = vim.tbl_deep_extend("force", {}, r.RelativeBelow)
+      if hl_above.fg then hl_above.fg = fade_colour(hl_above.fg, strength) end
+      if hl_below.fg then hl_below.fg = fade_colour(hl_below.fg, strength) end
+      vim.api.nvim_set_hl(0, "LineJusticeRelativeAbove" .. tier, hl_above)
+      vim.api.nvim_set_hl(0, "LineJusticeRelativeBelow" .. tier, hl_below)
+    end
+
+    -- Absolute tiers: only Near (full colour) and Distant (faded)
+    local abs_tiers = { Near = 0.0, Distant = abs_s }
+    for tier, strength in pairs(abs_tiers) do
+      local hl_above = vim.tbl_deep_extend("force", {}, r.AbsoluteAbove)
+      local hl_below = vim.tbl_deep_extend("force", {}, r.AbsoluteBelow)
+      if hl_above.fg then hl_above.fg = fade_colour(hl_above.fg, strength) end
+      if hl_below.fg then hl_below.fg = fade_colour(hl_below.fg, strength) end
+      vim.api.nvim_set_hl(0, "LineJusticeAbsoluteAbove" .. tier, hl_above)
+      vim.api.nvim_set_hl(0, "LineJusticeAbsoluteBelow" .. tier, hl_below)
+    end
+  end
 end
 
 -- ---------------------------------------------------------------------------
@@ -421,9 +545,19 @@ local function _segment(args)
     if args.relnum == 0 then
       abs_hl = "%#LineJusticeCursorLine#"
     elseif args.lnum > vim.fn.line(".") then
-      abs_hl = "%#LineJusticeAbsoluteBelow#"
+      if _state.fade_enabled then
+        local tier = get_abs_tier(args.relnum, _state.fade_bands)
+        abs_hl = "%#LineJusticeAbsoluteBelow" .. tier .. "#"
+      else
+        abs_hl = "%#LineJusticeAbsoluteBelow#"
+      end
     else
-      abs_hl = "%#LineJusticeAbsoluteAbove#"
+      if _state.fade_enabled then
+        local tier = get_abs_tier(args.relnum, _state.fade_bands)
+        abs_hl = "%#LineJusticeAbsoluteAbove" .. tier .. "#"
+      else
+        abs_hl = "%#LineJusticeAbsoluteAbove#"
+      end
     end
 
     -- Relative line number highlight
@@ -431,9 +565,19 @@ local function _segment(args)
     if args.relnum == 0 then
       rel_hl = "%#LineJusticeCursorLine#"
     elseif args.lnum > vim.fn.line(".") then
-      rel_hl = "%#LineJusticeRelativeBelow#"
+      if _state.fade_enabled then
+        local tier = get_rel_tier(args.relnum, _state.fade_bands)
+        rel_hl = "%#LineJusticeRelativeBelow" .. tier .. "#"
+      else
+        rel_hl = "%#LineJusticeRelativeBelow#"
+      end
     else
-      rel_hl = "%#LineJusticeRelativeAbove#"
+      if _state.fade_enabled then
+        local tier = get_rel_tier(args.relnum, _state.fade_bands)
+        rel_hl = "%#LineJusticeRelativeAbove" .. tier .. "#"
+      else
+        rel_hl = "%#LineJusticeRelativeAbove#"
+      end
     end
 
     -- Format both numbers
@@ -561,8 +705,10 @@ M.segment = _segment
 function M.setup(opts)
   config = vim.tbl_deep_extend("force", defaults, opts or {})
 
-  local ln_cfg = config.line_numbers
-  local wl_cfg = config.wrapped_lines
+  -- After deep-merging with defaults these are always present; the `or {}`
+  -- guards satisfy the type checker for the optional LuaDoc annotations.
+  local ln_cfg = config.line_numbers  or {}
+  local wl_cfg = config.wrapped_lines or {}
 
   -- Resolve the named theme into a concrete colour table via the registry
   local theme_tbl = {}
@@ -579,26 +725,35 @@ function M.setup(opts)
   -- Resolve the wrapped-line indicator character (validated once at setup)
   local indicator_char = resolve_indicator(wl_cfg)
 
+  -- Capture fade config for highlight resolution and render-time state.
+  -- After the deep-merge this is always a table; the cast satisfies the checker.
+  ---@type LineJusticeFade|nil
+  local fade_cfg = ln_cfg.fade
+
   -- number + relativenumber must both be true for statuscol to populate
   -- args.lnum and args.relnum correctly. These are functional requirements,
   -- not stylistic preferences.
   vim.o.number         = true
   vim.o.relativenumber = true
 
-  -- Perform initial highlight resolution
-  resolve_highlights(ln_cfg.overrides, theme_tbl)
+  -- Perform initial highlight resolution (includes banded fade groups).
+  resolve_highlights(ln_cfg.overrides, theme_tbl, fade_cfg)
 
   -- Re-resolve whenever the user switches colorscheme so colours stay in sync.
-  -- Both the theme and overrides are always re-applied on top of the new scheme.
+  -- Both the theme, overrides, and fade config are re-applied on top of the
+  -- new scheme. fade_cfg is captured by closure — no re-read needed.
   local grp = vim.api.nvim_create_augroup("LineJusticeColorScheme", { clear = true })
   vim.api.nvim_create_autocmd("ColorScheme", {
     group    = grp,
-    callback = function() resolve_highlights(ln_cfg.overrides, theme_tbl) end,
+    callback = function() resolve_highlights(ln_cfg.overrides, theme_tbl, fade_cfg) end,
   })
 
   -- Update mutable render state so the already-captured segment function
   -- picks up the new config without statuscol needing to be re-wired.
   _state.indicator_char = indicator_char
+  _state.fade_enabled   = fade_cfg ~= nil and fade_cfg.enabled ~= false
+  _state.fade_bands     = ((fade_cfg and fade_cfg.bands)
+                          or defaults.line_numbers.fade.bands) --[[@as table]]
   _state.ready          = true
 end
 

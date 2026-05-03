@@ -52,6 +52,36 @@
 --   Examples: "»", "⤷", "▸", "→", "╰"
 --
 -- ─────────────────────────────────────────────────────────────────────────────
+-- DISTANCE-BASED COLOUR FADE
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- When enabled (the default), line numbers progressively desaturate toward
+-- grey as their distance from the cursor increases. Numbers close to the
+-- cursor stay vivid; numbers far away whisper.
+--
+-- Relative numbers use 4 tiers: Near → Mid → Far → Distant
+-- Absolute numbers use 2 tiers: Near → Distant  (subtler — they're reference points)
+--
+-- line_numbers.fade.enabled            boolean  (default: true)
+--   Set to false to disable fading entirely and use flat colours.
+--
+-- line_numbers.fade.bands              table    (default: { near=5, mid=15, far=30 })
+--   Distance thresholds in rows:
+--     ≤ near  → full colour (Near tier)
+--     ≤ mid   → light fade  (Mid tier)
+--     ≤ far   → stronger fade (Far tier)
+--     > far   → maximum fade  (Distant tier)
+--
+-- line_numbers.fade.relative_strength  number   0.0–1.0 (default: 0.75)
+--   How far relative numbers fade at maximum distance.
+--   0.0 = no fade at all. 1.0 = fully desaturated grey.
+--
+-- line_numbers.fade.absolute_strength  number   0.0–1.0 (default: 0.30)
+--   How far absolute numbers fade at maximum distance.
+--   Kept lower than relative_strength so absolute numbers stay readable
+--   as reference points at any distance.
+--
+
 -- COLOUR THEMES
 -- ─────────────────────────────────────────────────────────────────────────────
 --
@@ -161,6 +191,30 @@ return {
     --   },
     --   wrapped_lines = { indicator = "Custom", custom = "╰" },
     -- },
+
+    -- ── Option I: distance-based colour fade (custom bands + strength) ────────
+    -- opts = {
+    --   line_numbers = {
+    --     theme = "Horizon",
+    --     fade = {
+    --       enabled           = true,
+    --       bands             = { near = 3, mid = 10, far = 25 }, -- tighter bands
+    --       relative_strength = 0.85,  -- relative numbers fade more aggressively
+    --       absolute_strength = 0.20,  -- absolute numbers barely fade
+    --     },
+    --   },
+    --   wrapped_lines = { indicator = "Bar" },
+    -- },
+
+    -- ── Option J: disable fade entirely ───────────────────────────────────────
+    -- opts = {
+    --   line_numbers = {
+    --     theme = "Horizon",
+    --     fade  = { enabled = false },  -- flat colours, no distance fading
+    --   },
+    --   wrapped_lines = { indicator = "Bar" },
+    -- },
+
   },
 
   -- ── Placing other segments alongside line-justice ─────────────────────────
