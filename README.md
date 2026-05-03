@@ -176,6 +176,40 @@ lj.setup({
       -- WrappedLine   = { fg = "#565f89", italic = true },
     },
 
+    -- fade (table | nil)
+    --   Distance-based colour fading. Line numbers progressively desaturate
+    --   toward grey as their distance from the cursor increases.
+    --   Relative numbers fade more aggressively (they ARE the distance signal).
+    --   Absolute numbers fade subtly so they stay readable as reference points.
+    fade = {
+
+      -- enabled (boolean)
+      --   Master switch. Set to false to disable all fading. Default: true.
+      enabled = true,
+
+      -- bands (table)
+      --   Distance thresholds (in lines) that define the four fade tiers.
+      --   Lines within `near` rows → full colour (Near tier).
+      --   Lines within `mid`  rows → light fade (Mid tier).
+      --   Lines within `far`  rows → stronger fade (Far tier).
+      --   Lines beyond `far`  rows → maximum fade (Distant tier).
+      --   Absolute numbers only use Near and Distant (two tiers).
+      bands = { near = 5, mid = 15, far = 30 },
+
+      -- relative_strength (number, 0.0–1.0)
+      --   How far relative numbers fade at maximum distance.
+      --   0.0 = no fade (original colour). 1.0 = fully desaturated grey.
+      --   Default: 0.75 — a strong fade that makes distant numbers recede.
+      relative_strength = 0.75,
+
+      -- absolute_strength (number, 0.0–1.0)
+      --   How far absolute numbers fade at maximum distance.
+      --   Kept lower than relative_strength so absolute numbers stay readable.
+      --   Default: 0.30 — a subtle fade that preserves readability.
+      absolute_strength = 0.30,
+
+    },
+
   },
 
   wrapped_lines = {
@@ -327,6 +361,53 @@ line_numbers = {
     WrappedLine = { fg = "#ff9e64", italic = true }, -- change indicator colour
   },
 },
+```
+
+---
+
+## Distance-based Fading
+
+Line numbers progressively desaturate toward grey as their distance from the cursor increases, so the numbers closest to you shout and the ones far away whisper.
+
+- **Relative numbers** fade through four tiers — Near → Mid → Far → Distant — because they *are* the distance signal.
+- **Absolute numbers** fade through two tiers — Near → Distant — for a subtler effect that keeps them readable as reference points at any distance.
+
+Fading is **enabled by default**. To disable it:
+
+```lua
+lj.setup({
+  line_numbers = {
+    fade = { enabled = false },
+  },
+})
+```
+
+### Fade bands
+
+The `bands` table controls the distance thresholds (in lines) for each tier:
+
+| Tier | Condition | Default |
+|---|---|---|
+| Near | `distance <= near` | ≤ 5 lines |
+| Mid | `distance <= mid` | ≤ 15 lines |
+| Far | `distance <= far` | ≤ 30 lines |
+| Distant | `distance > far` | > 30 lines |
+
+### Fade strength
+
+`relative_strength` and `absolute_strength` control how far the colour desaturates at maximum distance. `0.0` keeps the original colour; `1.0` produces fully grey.
+
+```lua
+lj.setup({
+  line_numbers = {
+    fade = {
+      enabled           = true,
+      bands             = { near = 5, mid = 15, far = 30 },
+      relative_strength = 0.75,  -- relative numbers fade strongly
+      absolute_strength = 0.30,  -- absolute numbers fade subtly
+    },
+  },
+})
 ```
 
 ---
@@ -511,6 +592,57 @@ lj.setup({
     },
   },
   wrapped_lines = { indicator = "Custom", custom = "╰" },
+})
+```
+
+### Disable fading
+
+```lua
+lj.setup({
+  line_numbers = {
+    fade = { enabled = false },
+  },
+})
+```
+
+### Tighter fade bands — numbers fade sooner
+
+```lua
+lj.setup({
+  line_numbers = {
+    fade = {
+      enabled = true,
+      bands   = { near = 3, mid = 8, far = 15 },
+    },
+  },
+})
+```
+
+### Stronger fade — distant numbers nearly disappear
+
+```lua
+lj.setup({
+  line_numbers = {
+    fade = {
+      enabled           = true,
+      relative_strength = 0.90,
+      absolute_strength = 0.50,
+    },
+  },
+})
+```
+
+### No fade on relative, subtle fade on absolute
+
+```lua
+lj.setup({
+  line_numbers = {
+    fade = {
+      enabled           = true,
+      relative_strength = 0.0,   -- relative numbers stay full colour
+      absolute_strength = 0.40,  -- absolute numbers fade gently
+    },
+  },
 })
 ```
 
