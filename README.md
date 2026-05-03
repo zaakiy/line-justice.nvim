@@ -696,6 +696,17 @@ Both the absolute and relative columns always share the same width, so the gutte
 | Wrapped-line indicator | `relculright`, `bt_ignore`, `ft_ignore`, … |
 | `vim.o.number` / `vim.o.relativenumber` | Everything else |
 
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=zaakiy%2Fline-justice.nvim&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=zaakiy/line-justice.nvim&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=zaakiy/line-justice.nvim&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=zaakiy/line-justice.nvim&type=date&legend=top-left" />
+ </picture>
+</a>
+
 ## License
 
 [Apache 2.0](LICENSE)
