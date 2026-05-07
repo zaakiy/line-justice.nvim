@@ -33,8 +33,9 @@
 
 **line-justice.nvim** is a Neovim plugin that renders **both absolute and relative line numbers simultaneously** in the statuscolumn, solving a real-world friction point for pair programming, code reviews, and remote collaboration.
 
-- The **left column** always shows the true (absolute) line number in the file.
-- The **right column** shows the cursor-relative distance on every non-cursor line.
+- The **mark column** (leftmost, 1 char wide) shows the first vim mark set on a line (`a`–`z` before `A`–`Z`); blank when no mark exists. A 1-char gap separates it from the absolute number column.
+- The **absolute column** always shows the true (absolute) line number in the file.
+- The **relative column** shows the cursor-relative distance on every non-cursor line, always exactly 3 chars wide (truncated to the 3 rightmost chars if longer).
 - The **cursor line** itself is highlighted distinctly (no relative number shown — it would always be `0`).
 - Soft-wrapped continuation lines show a configurable indicator character instead of any numbers.
 
@@ -98,9 +99,14 @@ User calls lj.setup(opts)
   └─ M.themes.get(config.line_numbers.theme)        → theme_tbl
   └─ resolve_indicator(config.wrapped_lines)         → indicator_char
   └─ vim.o.number = true, vim.o.relativenumber = true
-  └─ resolve_highlights(overrides, theme_tbl)
-  │    → registers LineJustice{CursorLine,AbsoluteAbove,AbsoluteBelow,
+  └─ resolve_highlights(overrides, theme_tbl, fade_cfg)
+  │    → registers LineJustice{Mark,CursorLine,AbsoluteAbove,AbsoluteBelow,
   │      RelativeAbove,RelativeBelow,WrappedLine} via nvim_set_hl
+  │    → when fade enabled: also registers banded groups
+  │      LineJusticeRelativeAbove{Near,Mid,Far,Distant}
+  │      LineJusticeRelativeBelow{Near,Mid,Far,Distant}
+  │      LineJusticeAbsoluteAbove{Near,Distant}
+  │      LineJusticeAbsoluteBelow{Near,Distant}
   └─ nvim_create_autocmd("ColorScheme")
   │    → re-runs resolve_highlights on every :colorscheme change
   └─ _state.indicator_char = indicator_char
@@ -121,6 +127,7 @@ statuscol calls M.segment (= _segment) for every statuscolumn render:
 
 | NeoVim group | Used for |
 |---|---|
+| `LineJusticeMark` | Mark letter in the leftmost mark column |
 | `LineJusticeCursorLine` | Absolute & relative columns on the cursor row |
 | `LineJusticeAbsoluteAbove` | Absolute numbers for lines above cursor |
 | `LineJusticeAbsoluteBelow` | Absolute numbers for lines below cursor |
@@ -138,13 +145,19 @@ statuscol calls M.segment (= _segment) for every statuscolumn render:
 LineJusticeConfig
 ├── line_numbers  (LineJusticeLineNumbers)
 │   ├── theme      string | nil   "Horizon" | nil (auto-detect)
-│   └── overrides  LineJusticeOverrides
-│       ├── CursorLine?     { fg, bold? }
-│       ├── AbsoluteAbove?  { fg }
-│       ├── AbsoluteBelow?  { fg }
-│       ├── RelativeAbove?  { fg }
-│       ├── RelativeBelow?  { fg }
-│       └── WrappedLine?    { fg, italic? }
+│   ├── overrides  LineJusticeOverrides
+│   │   ├── CursorLine?     { fg, bold? }
+│   │   ├── AbsoluteAbove?  { fg }
+│   │   ├── AbsoluteBelow?  { fg }
+│   │   ├── RelativeAbove?  { fg }
+│   │   ├── RelativeBelow?  { fg }
+│   │   ├── WrappedLine?    { fg, italic? }
+│   │   └── Mark?           { fg, bold? }
+│   └── fade       LineJusticeFade
+│       ├── enabled            boolean  (default: true)
+│       ├── bands              table    { near=5, mid=15, far=30 }
+│       ├── relative_strength  number   0.0–1.0 (default: 0.75)
+│       └── absolute_strength  number   0.0–1.0 (default: 0.30)
 └── wrapped_lines (LineJusticeWrappedLines)
     ├── indicator  string   "None"|"Arrow"|"Chevron"|"Dot"|"Ellipsis"|"Bar"|"Custom"
     └── custom     string   character used when indicator="Custom"
@@ -157,6 +170,12 @@ LineJusticeConfig
   line_numbers = {
     theme     = "Horizon",
     overrides = {},
+    fade = {
+      enabled           = true,
+      bands             = { near = 5, mid = 15, far = 30 },
+      relative_strength = 0.75,
+      absolute_strength = 0.30,
+    },
   },
   wrapped_lines = {
     indicator = "Bar",
@@ -194,6 +213,7 @@ When `theme = nil`, each colour slot probes a list of NeoVim highlight groups in
 | `RelativeAbove` | `LineNr` |
 | `RelativeBelow` | `LineNrBelow`, `String` |
 | `WrappedLine` | `NonText` |
+| `Mark` | `MarkSign`, `Special` |
 
 ### Built-in themes
 
@@ -234,7 +254,7 @@ Three themes ship out of the box. All are defined as `LineJusticeThemeSpec` file
 
 ### ColorScheme autocmd
 
-`resolve_highlights()` is wired to the `ColorScheme` autocommand in the `LineJusticeColorScheme` augroup. Every `:colorscheme` change automatically re-registers all six highlight groups. The augroup is created with `{ clear = true }` so repeated `setup()` calls do not accumulate duplicate listeners.
+`resolve_highlights()` is wired to the `ColorScheme` autocommand in the `LineJusticeColorScheme` augroup. Every `:colorscheme` change automatically re-registers all seven highlight groups (including `LineJusticeMark`). The augroup is created with `{ clear = true }` so repeated `setup()` calls do not accumulate duplicate listeners.
 
 ---
 
@@ -320,7 +340,11 @@ All helpers are `local` to `init.lua` and not exported.
 | `numeric_to_hex(num)` | `number → string` | Converts a NeoVim colour integer to a `#rrggbb` hex string. |
 | `resolve_indicator(wl_cfg)` | `LineJusticeWrappedLines → string` | Validates and returns the indicator character; emits WARN for unknown/empty. |
 | `centre(str, width)` | `(string, number) → string` | Centres `str` in a field of `width` chars with space padding. |
-| `resolve_highlights(overrides, theme_tbl)` | `(table, table) → nil` | Resolves all six colour slots and calls `vim.api.nvim_set_hl` for each. |
+| `fade_colour(hex, strength)` | `(string, number) → string` | Interpolates a hex colour toward its luminance-weighted grey by `strength` (0.0–1.0). Used to build banded fade groups. |
+| `get_rel_tier(relnum, bands)` | `(number, table) → string` | Maps a relative distance to one of four fade tiers: `"Near"`, `"Mid"`, `"Far"`, `"Distant"`. |
+| `get_abs_tier(relnum, bands)` | `(number, table) → string` | Maps a relative distance to one of two fade tiers: `"Near"`, `"Distant"`. |
+| `get_mark_for_line(lnum, bufnr)` | `(number, number) → string\|nil` | Returns the first mark character set on `lnum` in `bufnr` (lowercase `a`–`z` before uppercase `A`–`Z`), or `nil`. Uses a per-buffer lazy cache invalidated via `vim.schedule`. |
+| `resolve_highlights(overrides, theme_tbl, fade_cfg)` | `(table, table, table\|nil) → nil` | Resolves all seven colour slots and calls `vim.api.nvim_set_hl` for each. When `fade_cfg.enabled` is true, also registers banded fade groups. |
 
 ---
 
@@ -347,14 +371,17 @@ _state.ready == false
   → one-shot ERROR notify (rate-limited by _warned_not_ready flag), return ""
 
 args.virtnum == 0  (real line)
+  → mark_char = get_mark_for_line(args.lnum, args.buf)  — nil if no mark
   → abs_hl  based on: relnum==0 (cursor) / lnum > cursor (below) / else (above)
   → rel_hl  based on: relnum==0 (cursor) / lnum > cursor (below) / else (above)
   → abs_num = format_line_number(args.lnum),  right-aligned in col_w
   → rel_num = "" on cursor line, else format_line_number(args.relnum)
-  → gutter width = col_w + 1 (space) + col_w
-  → return "%#HL#" .. abs_num .. " " .. "%#HL#" .. rel_num .. padding
+             capped at 3 chars (rightmost 3 if longer), right-aligned in 3
+  → layout: [mark(1)][gap(1)][abs(col_w)][sep+rel(4)][trailing(1)]
+  → return mark_col .. " " .. abs_hl .. abs_num .. rel_hl .. rel_num .. " "
 
 args.virtnum != 0  (soft-wrapped continuation)
+  → gutter_w = col_w + 6  (mark+gap+abs+sep+rel = 1+1+col_w+1+3)
   → return "%#LineJusticeWrappedLine#" .. centre(_state.indicator_char, gutter_w)
 ```
 
@@ -364,6 +391,8 @@ args.virtnum != 0  (soft-wrapped continuation)
 local _state = {
   indicator_char = "",     -- resolved wrapped-line character; updated by setup()
   ready          = false,  -- true once setup() has been called at least once
+  fade_enabled   = false,  -- true when distance-based fading is active
+  fade_bands     = { near = 5, mid = 15, far = 30 },  -- distance thresholds
 }
 ```
 
@@ -375,7 +404,7 @@ local _state = {
 local num_digits = #tostring(vim.fn.line("$"))
 local num_commas = math.floor((num_digits - 1) / 3)
 local col_w      = num_digits + num_commas   -- accounts for thousands separators
-local gutter_w   = col_w + 1 + col_w
+local gutter_w   = col_w + 6                 -- mark(1)+gap(1)+abs(col_w)+sep(1)+rel(3)
 ```
 
 This means columns automatically grow as the file grows — no manual width configuration needed. A 999-line file uses a 3-char column; a 1,000-line file promotes to 5 chars (`1,000`); a 10,000-line file uses 6 chars (`10,000`). Both the real-line path and the wrapped-line path use the **exact same formula** — keep them in sync or the wrapped indicator will be off-centre.
@@ -607,7 +636,7 @@ There is currently no automated test suite. All testing is manual. Before any no
 | Re-`setup()` not taking effect | Not possible with current architecture — `_state` is mutated in place | Verify `setup()` is completing without errors |
 | Colours wrong after colorscheme change | `ColorScheme` autocmd not firing | Check augroup `LineJusticeColorScheme` exists; ensure `setup()` was called |
 | Thousands separator misaligned | `col_w` formula bug | Both real-line and wrap-line paths use the same formula — keep them in sync |
-| Wrapped indicator not centred | `centre()` helper receiving wrong width | Verify `gutter_w = col_w + 1 + col_w` in both branches |
+| Wrapped indicator not centred | `centre()` helper receiving wrong width | Verify `gutter_w = col_w + 6` in both the real-line and wrap-line branches |
 | `Unknown theme` warning | Typo in `theme` string | Check `themes.list()` for valid names (case-sensitive); ensure custom themes are registered before `setup()` |
 | `Unknown indicator` warning | Typo in `indicator` string | Check `WRAPPED_INDICATORS` keys (case-sensitive) |
 | Duplicate `ColorScheme` autocmds | `setup()` called multiple times | Already handled — augroup created with `{ clear = true }` |

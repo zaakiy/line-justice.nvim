@@ -64,6 +64,7 @@
 ---@field RelativeAbove?  table  Relative distance for lines above the cursor
 ---@field RelativeBelow?  table  Relative distance for lines below the cursor
 ---@field WrappedLine?    table  Colour of the wrapped-line indicator character
+---@field Mark?           table  Colour of the mark indicator character (e.g. { fg = "#e0af68" })
 
 
 ---Distance-based colour fade for line numbers.
@@ -254,6 +255,7 @@ local FALLBACK = {
   RelativeAbove = { fg = "#7b9ac7" },
   RelativeBelow = { fg = "#6aa781" },
   WrappedLine   = { fg = "#565f89", italic = true },
+  Mark          = { fg = "#e0af68", bold   = true },
 }
 
 -- ---------------------------------------------------------------------------
@@ -465,6 +467,7 @@ local function resolve_highlights(overrides, theme_tbl, fade_cfg)
     RelativeAbove = resolve("RelativeAbove", { "LineNr" }),
     RelativeBelow = resolve("RelativeBelow", { "LineNrBelow", "String" }),
     WrappedLine   = resolve("WrappedLine",   { "NonText" }),
+    Mark          = resolve("Mark",          { "MarkSign", "Special" }),
   }
 
   -- Register the flat highlight groups (always present; used when fade is off
@@ -475,6 +478,7 @@ local function resolve_highlights(overrides, theme_tbl, fade_cfg)
   vim.api.nvim_set_hl(0, "LineJusticeRelativeAbove", r.RelativeAbove)
   vim.api.nvim_set_hl(0, "LineJusticeRelativeBelow", r.RelativeBelow)
   vim.api.nvim_set_hl(0, "LineJusticeWrappedLine",   r.WrappedLine)
+  vim.api.nvim_set_hl(0, "LineJusticeMark",          r.Mark)
 
   -- Register banded fade groups when fade is enabled.
   -- Relative numbers: 4 tiers (Near → Mid → Far → Distant).
@@ -510,6 +514,74 @@ local function resolve_highlights(overrides, theme_tbl, fade_cfg)
       vim.api.nvim_set_hl(0, "LineJusticeAbsoluteBelow" .. tier, hl_below)
     end
   end
+end
+
+-- ---------------------------------------------------------------------------
+-- Mark cache
+-- ---------------------------------------------------------------------------
+--
+-- Built lazily on the first segment call of each render cycle, then reused
+-- for every subsequent line in that same cycle. Invalidated via vim.schedule
+-- so it is always fresh at the start of the next redraw.
+--
+-- Keyed by buffer number so multiple windows with different buffers render
+-- correctly within the same event-loop iteration.
+--
+---@type table<number, table<number, string>>
+local _mark_cache = {}
+local _mark_cache_scheduled = false
+
+---Return the first mark character set on `lnum` in `bufnr`, or nil.
+---
+--- Priority: lowercase a–z (buffer-local) before uppercase A–Z (global).
+--- When two marks of the same class share a line the one that sorts first
+--- alphabetically wins (getmarklist returns them in definition order, so we
+--- just take the first hit).
+---
+---@param lnum  number  1-based line number
+---@param bufnr number  Buffer number (args.buf from statuscol)
+---@return string|nil   Single mark character, e.g. "a" or "B", or nil
+local function get_mark_for_line(lnum, bufnr)
+  if not _mark_cache[bufnr] then
+    local cache = {}
+
+    -- Buffer-local marks (a–z)
+    local local_marks = vim.fn.getmarklist(bufnr)
+    for _, mark in ipairs(local_marks) do
+      local char = mark.mark:sub(2, 2)
+      if char:match("[a-z]") then
+        local ml = mark.pos[2]
+        if ml > 0 and not cache[ml] then
+          cache[ml] = char
+        end
+      end
+    end
+
+    -- Global marks (A–Z) — only those pointing at this buffer
+    local global_marks = vim.fn.getmarklist()
+    for _, mark in ipairs(global_marks) do
+      local char = mark.mark:sub(2, 2)
+      if char:match("[A-Z]") and mark.pos[1] == bufnr then
+        local ml = mark.pos[2]
+        if ml > 0 and not cache[ml] then
+          cache[ml] = char
+        end
+      end
+    end
+
+    _mark_cache[bufnr] = cache
+
+    -- Invalidate after the current render cycle completes
+    if not _mark_cache_scheduled then
+      _mark_cache_scheduled = true
+      vim.schedule(function()
+        _mark_cache           = {}
+        _mark_cache_scheduled = false
+      end)
+    end
+  end
+
+  return _mark_cache[bufnr][lnum]
 end
 
 -- ---------------------------------------------------------------------------
@@ -597,15 +669,28 @@ local function _segment(args)
     local num_commas  = math.floor((num_digits - 1) / 3)
     local col_w       = num_digits + num_commas
 
-    -- Right-align the absolute number
+    -- Mark column: 1 char (letter) or space when no mark is set on this line.
+    -- A 1-char gap follows before the absolute number column.
+    local mark_char = get_mark_for_line(args.lnum, args.buf)
+    local mark_col  = mark_char
+      and ("%#LineJusticeMark#" .. mark_char)
+      or  " "
+
+    -- Right-align the absolute number within col_w
     abs_num = string.rep(" ", math.max(0, col_w - #abs_num)) .. abs_num
 
-    -- Right-align the relative number with separator space
-    -- The separator space is included in the relative column width
-    rel_num = " " .. string.rep(" ", math.max(0, col_w - #rel_num)) .. rel_num
+    -- Relative number column is always exactly 3 chars wide.
+    -- Truncate to the 3 rightmost characters if the formatted number is longer
+    -- (only possible for files > 999 lines where the cursor is > 999 lines
+    -- away — a practical edge case, but handled gracefully).
+    if #rel_num > 3 then
+      rel_num = rel_num:sub(-3)
+    end
+    -- Right-align within 3 chars; prepend the 1-char separator space
+    rel_num = " " .. string.rep(" ", math.max(0, 3 - #rel_num)) .. rel_num
 
-    -- Add trailing space to ensure separation from buffer content
-    return abs_hl .. abs_num .. rel_hl .. rel_num .. " "
+    -- Layout: [mark(1)] [gap(1)] [abs(col_w)] [sep+rel(4)] [trailing(1)]
+    return mark_col .. " " .. abs_hl .. abs_num .. rel_hl .. rel_num .. " "
 
   else
     -- ── Soft-wrapped continuation line ──────────────────────────────────
@@ -615,7 +700,8 @@ local function _segment(args)
     local num_digits  = #tostring(total_lines)
     local num_commas  = math.floor((num_digits - 1) / 3)
     local col_w       = num_digits + num_commas
-    local gutter_w    = col_w + 1 + col_w
+    -- Gutter width matches the real-line layout: mark(1)+gap(1)+abs(col_w)+sep+rel(4) = col_w+6
+    local gutter_w    = col_w + 6
 
     -- Centre the indicator in the full gutter width
     local centred = centre(_state.indicator_char, gutter_w)
